@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "USB write test"
+device=$(find_pchh_data_device) || {
+    bad "PCHH_DATA not visible"
+    exit 1
+}
+
+mountpoint=$(findmnt -n -o TARGET "$device" 2>/dev/null || true)
+mounted_here=0
+if [ -z "$mountpoint" ]; then
+    mountpoint=/mnt/pchh-usb
+    mkdir -p "$mountpoint"
+    mount -o rw "$device" "$mountpoint" 2>/dev/null || {
+        bad "Could not mount $device read-write."
+        exit 1
+    }
+    mounted_here=1
+fi
+
+test_file="$mountpoint/.pchh-usb-test-$$"
+payload=/tmp/pchh-usb-payload-$$
+printf '%s\n' "PCHH USB write verification $(date)" "0123456789abcdef0123456789abcdef" > "$payload"
+if cp "$payload" "$test_file" && sync && [ "$(wc -c < "$payload")" -eq "$(wc -c < "$test_file")" ] && cmp -s "$payload" "$test_file"; then
+    rm -f "$test_file" "$payload"
+    sync
+    if [ ! -e "$test_file" ]; then
+        ok "USB write, read-back, sync, and cleanup passed"
+    else
+        bad "USB test file could not be removed"
+    fi
+else
+    bad "USB write or read-back failed"
+    rm -f "$test_file" "$payload"
+    [ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true
+    exit 1
+fi
+[ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true

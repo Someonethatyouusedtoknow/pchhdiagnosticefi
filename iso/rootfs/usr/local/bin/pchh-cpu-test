@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "CPU load / thermal test"
+info "This runs a timed CPU workload. Stop it immediately if cooling is abnormal."
+
+if ! have stress-ng; then
+    warn "stress-ng is unavailable; CPU test cannot run."
+    exit 0
+fi
+
+seconds=${PCHH_CPU_SECONDS:-30}
+kv "duration" "${seconds}s"
+start_errors=$(dmesg 2>/dev/null | grep -ciE 'mce|machine check|hardware error|thermal thrott' || true)
+start_temp=$(sensors 2>/dev/null | grep -iE 'Package id|Tctl|Tdie|Core [0-9]' | head -n 1 || true)
+info "Starting CPU workload..."
+stress-ng --cpu 0 --timeout "${seconds}s" --metrics-brief > /tmp/pchh-stress-ng.out 2>&1
+stress_result=$?
+sanitize_output < /tmp/pchh-stress-ng.out | sed 's/^/  /'
+end_errors=$(dmesg 2>/dev/null | grep -ciE 'mce|machine check|hardware error|thermal thrott' || true)
+end_temp=$(sensors 2>/dev/null | grep -iE 'Package id|Tctl|Tdie|Core [0-9]' | head -n 1 || true)
+kv "temperature before" "${start_temp:-unavailable}"
+kv "temperature after" "${end_temp:-unavailable}"
+if [ "$stress_result" -ne 0 ]; then
+    bad "CPU workload aborted or stress-ng reported an error."
+elif [ "$end_errors" -gt "$start_errors" ]; then
+    bad "New machine-check or thermal messages appeared during the test."
+else
+    ok "CPU workload completed without new machine-check or thermal log messages."
+fi

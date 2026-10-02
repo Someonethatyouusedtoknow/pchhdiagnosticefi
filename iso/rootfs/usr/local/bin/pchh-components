@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# PCHH — high-level component overview + health of the whole machine.
+. /usr/local/lib/pchh/common.sh
+
+header "Component Overview"
+
+section "CPU"
+if have lscpu; then
+    kv "Model"        "$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -n1)"
+    kv "Architecture" "$(lscpu | sed -n 's/^Architecture:[[:space:]]*//p' | head -n1)"
+    kv "Logical CPUs" "$(lscpu | sed -n 's/^CPU(s):[[:space:]]*//p' | head -n1)"
+    kv "Socket(s)"    "$(lscpu | sed -n 's/^Socket(s):[[:space:]]*//p' | head -n1)"
+    kv "Core(s)/sock" "$(lscpu | sed -n 's/^Core(s) per socket:[[:space:]]*//p' | head -n1)"
+    kv "Virtualization" "$(lscpu | sed -n 's/^Virtualization:[[:space:]]*//p' | head -n1)"
+elif [ -r /proc/cpuinfo ]; then
+    kv "Model" "$(sed -n 's/^model name[[:space:]]*:[[:space:]]*//p' /proc/cpuinfo | head -n1)"
+fi
+
+section "Memory summary"
+if [ -r /proc/meminfo ]; then
+    kv "Total" "$(awk '/^MemTotal:/{printf "%.1f GiB", $2/1024/1024}' /proc/meminfo)"
+fi
+
+section "Block devices"
+if have lsblk; then
+    lsblk -o NAME,SIZE,TYPE,TRAN,MODEL 2>/dev/null | sed 's/^/  /'
+else
+    info "lsblk not available"
+fi
+
+section "PCI devices"
+if have lspci; then
+    lspci 2>/dev/null | sed 's/^/  /'
+else
+    info "lspci not available"
+fi
+
+section "USB devices"
+if have lsusb; then
+    lsusb 2>/dev/null | sed 's/^/  /'
+else
+    info "lsusb not available"
+fi
+
+section "Kernel log — recent errors/warnings"
+if have dmesg; then
+    errs=$(dmesg 2>/dev/null | grep -Ei 'error|fail|fault|critical|overheat|throttl|I/O error' \
+        | grep -Evi 'error_handler|no error|error=0' | tail -n 15)
+    if [ -n "$errs" ]; then
+        printf '%s\n' "$errs" | sed 's/^/  /'
+    else
+        ok "No concerning kernel messages."
+    fi
+else
+    info "dmesg not available"
+fi

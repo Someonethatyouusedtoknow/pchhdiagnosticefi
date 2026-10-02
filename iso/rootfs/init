@@ -1,0 +1,79 @@
+#!/bin/busybox sh
+#
+
+export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/usr/sbin:/bin:/usr/bin
+
+/bin/busybox --install -s 2>/dev/null
+
+mkdir -p /proc /sys /dev /run /tmp /var/log
+mount_fs() {
+    local fstype source target
+    fstype="$1"
+    source="$2"
+    target="$3"
+    mount -t "$fstype" "$source" "$target" 2>/dev/null || {
+        printf 'PCHH: mount failed: %s on %s\n' "$fstype" "$target" >&2
+        return 1
+    }
+}
+
+mount_fs proc proc /proc
+mount_fs sysfs sysfs /sys
+if [ -d /sys/firmware/efi ]; then
+    [ -d /sys/firmware/efi/efivars ] && mount_fs efivarfs efivarfs /sys/firmware/efi/efivars || true
+fi
+mount_fs devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mount_fs devpts devpts /dev/pts
+[ -e /dev/ptmx ] || ln -s pts/ptmx /dev/ptmx
+mount_fs tmpfs tmpfs /run
+mount_fs tmpfs tmpfs /tmp
+mount_fs tmpfs tmpfs /var/log
+
+[ -x /sbin/mdev ] && mdev -s 2>/dev/null
+
+for m in scsi_mod usbcore usb_common uas usb-storage nvme_core nvme ahci \
+         libahci libata sd_mod sr_mod ata_generic uhci-hcd ohci-hcd \
+         ehci-hcd xhci-hcd xhci-pci; do
+    modprobe "$m" 2>/dev/null || printf 'PCHH: module unavailable: %s\n' "$m" >&2
+done
+
+for m in drm drm_kms_helper ttm bochs virtio-gpu qxl i915 xe amdgpu radeon nouveau; do
+    modprobe "$m" 2>/dev/null
+done
+
+for m in coretemp k10temp kvm-amd kvm-intel i5500_temp jc42 atk0110 \
+         nct6775 it87 acpi-cpufreq; do
+    modprobe "$m" 2>/dev/null
+done
+
+sleep 3
+
+if [ ! -d /sys/dev/block ]; then
+    echo "PCHH: ERROR: sysfs block-device tree is unavailable." >&2
+fi
+
+clear 2>/dev/null
+printf '\n\n\n\n\n\n'
+printf '                         P C H H\n'
+printf '                    P C   H E L P   H U B\n\n'
+printf '                         Initializing\n'
+printf '\n'
+for script in /usr/local/bin/pchh /usr/local/bin/pchh-*; do
+    [ -f "$script" ] || continue
+    bash -n "$script" 2>/dev/null || printf 'PCHH: program check failed: %s\n' "$(basename "$script")" >&2
+done
+sleep 3
+
+echo "pchh" > /proc/sys/kernel/hostname 2>/dev/null
+
+clear 2>/dev/null
+echo "PCHH: diagnostic environment ready."
+
+if [ -x /usr/local/bin/pchh ]; then
+    exec /usr/local/bin/pchh
+fi
+
+# Fallback: drop straight to a shell if the menu is missing.
+echo "PCHH: menu not found, dropping to shell."
+exec /bin/sh

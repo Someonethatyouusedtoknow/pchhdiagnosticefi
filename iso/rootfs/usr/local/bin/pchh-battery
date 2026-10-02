@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# PCHH - battery and power health diagnostics.
+. /usr/local/lib/pchh/common.sh
+
+header "Battery health"
+
+found=0
+for battery in /sys/class/power_supply/BAT*; do
+    [ -d "$battery" ] || continue
+    found=1
+    name=$(basename "$battery")
+    section "$name"
+    kv "status" "$(cat "$battery/status" 2>/dev/null || echo unknown)"
+    kv "health" "$(cat "$battery/health" 2>/dev/null || echo unknown)"
+    kv "cycle count" "$(cat "$battery/cycle_count" 2>/dev/null || echo unknown)"
+
+    full=$(cat "$battery/energy_full" 2>/dev/null || cat "$battery/charge_full" 2>/dev/null || true)
+    design=$(cat "$battery/energy_full_design" 2>/dev/null || cat "$battery/charge_full_design" 2>/dev/null || true)
+    if [ -n "$full" ] && [ -n "$design" ] && [ "$design" -gt 0 ] 2>/dev/null; then
+        percent=$(awk -v full="$full" -v design="$design" 'BEGIN { printf "%.0f%%", (full / design) * 100 }')
+        kv "full charge capacity" "$full"
+        kv "design capacity" "$design"
+        kv "capacity health" "$percent"
+    else
+        info "Capacity health is not exposed by this battery driver."
+    fi
+
+    temp=$(cat "$battery/temp" 2>/dev/null || true)
+    [ -n "$temp" ] && kv "temperature" "$(awk -v value="$temp" 'BEGIN { printf "%.1f C", value / 10 }')"
+done
+
+if [ "$found" -eq 0 ]; then
+    info "No batteries detected."
+fi
+
+section "AC power"
+for supply in /sys/class/power_supply/AC* /sys/class/power_supply/ADP*; do
+    [ -d "$supply" ] || continue
+    kv "$(basename "$supply") online" "$(cat "$supply/online" 2>/dev/null || echo unknown)"
+done

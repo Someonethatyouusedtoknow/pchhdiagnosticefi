@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+settings_file=/run/pchh/settings.conf
+mkdir -p /run/pchh
+load_settings
+
+save_settings() {
+    umask 077
+    {
+        printf 'PCHH_CPU_SECONDS=%s\n' "$PCHH_CPU_SECONDS"
+        printf 'PCHH_AUTO_USB_REPORT=%s\n' "$PCHH_AUTO_USB_REPORT"
+        printf 'PCHH_GPU_VISUAL=%s\n' "$PCHH_GPU_VISUAL"
+        printf 'PCHH_VERBOSE=%s\n' "$PCHH_VERBOSE"
+        printf 'PCHH_RAM_MODE=%s\n' "$PCHH_RAM_MODE"
+    } > "$settings_file.tmp" && mv "$settings_file.tmp" "$settings_file"
+    ok "Settings applied for this boot"
+}
+
+while true; do
+    header "Settings"
+    kv "CPU test seconds" "$PCHH_CPU_SECONDS"
+    kv "Auto-save reports" "$([ "$PCHH_AUTO_USB_REPORT" -eq 1 ] && echo on || echo off)"
+    kv "GPU visual test" "$([ "$PCHH_GPU_VISUAL" -eq 1 ] && echo on || echo off)"
+    kv "Verbose diagnostics" "$([ "$PCHH_VERBOSE" -eq 1 ] && echo on || echo off)"
+    kv "RAM test mode" "$PCHH_RAM_MODE"
+    echo
+    echo "  1) CPU test duration"
+    echo "  2) Toggle automatic USB report save"
+    echo "  3) Toggle GPU visual test"
+    echo "  4) Toggle verbose diagnostics"
+    echo "  5) RAM test mode (live / Memtest86+)"
+    echo "  6) Apply and return"
+    echo "  q) Cancel"
+    printf '\n  Select: '
+    read -r choice
+    case "$choice" in
+        1) printf '  Seconds (10-300): '; read -r value
+           case "$value" in *[!0-9]*|'') warn "Enter a whole number." ;;  *)
+               [ "$value" -lt 10 ] && value=10; [ "$value" -gt 300 ] && value=300
+               PCHH_CPU_SECONDS="$value" ;; esac ;;
+        2) [ "$PCHH_AUTO_USB_REPORT" -eq 1 ] && PCHH_AUTO_USB_REPORT=0 || PCHH_AUTO_USB_REPORT=1 ;;
+        3) [ "$PCHH_GPU_VISUAL" -eq 1 ] && PCHH_GPU_VISUAL=0 || PCHH_GPU_VISUAL=1 ;;
+        4) [ "$PCHH_VERBOSE" -eq 1 ] && PCHH_VERBOSE=0 || PCHH_VERBOSE=1 ;;
+        5) [ "$PCHH_RAM_MODE" = live ] && PCHH_RAM_MODE=memtest || PCHH_RAM_MODE=live ;;
+        6) save_settings; pause; exit 0 ;;
+        q|Q) exit 0 ;;
+    esac
+done

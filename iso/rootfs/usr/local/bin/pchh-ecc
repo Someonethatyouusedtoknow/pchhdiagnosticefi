@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# PCHH - ECC memory and machine-check diagnostics.
+. /usr/local/lib/pchh/common.sh
+
+header "ECC / Machine-check diagnostics"
+
+section "EDAC memory controller"
+if [ -d /sys/devices/system/edac ]; then
+    found=0
+    for controller in /sys/devices/system/edac/mc/mc*; do
+        [ -d "$controller" ] || continue
+        found=1
+        name=$(basename "$controller")
+        ce=$(cat "$controller/ce_count" 2>/dev/null || echo "unknown")
+        ue=$(cat "$controller/ue_count" 2>/dev/null || echo "unknown")
+        kv "$name corrected errors" "$ce"
+        kv "$name uncorrected errors" "$ue"
+        [ "$ue" = "0" ] && ok "$name reports no uncorrected errors" || [ "$ue" = "unknown" ] || bad "$name reports uncorrected errors"
+    done
+    [ "$found" -eq 1 ] || info "No EDAC memory controllers reported by the kernel."
+else
+    info "EDAC is not available on this system or is not loaded."
+fi
+
+section "Machine-check events"
+if have dmesg; then
+    events=$(dmesg 2>/dev/null | grep -iE 'machine check|mce:|hardware error|hardware event' || true)
+    if [ -n "$events" ]; then
+        bad "Machine-check or hardware-error messages detected:"
+        printf '%s\n' "$events"
+    else
+        ok "No machine-check events found in the current kernel log."
+    fi
+else
+    info "dmesg is not available."
+fi

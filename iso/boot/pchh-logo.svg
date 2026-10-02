@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+  <rect width="640" height="480" fill="#193f6a"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="116" y="78" width="408" height="244" rx="8" stroke-width="14"/>
+    <path d="M275 322v34h-48v18h186v-18h-48v-34" stroke-width="14"/>
+  </g>
+  <text x="320" y="236" text-anchor="middle" fill="#fff" font-family="DejaVu Sans, sans-serif" font-size="142" font-weight="900" letter-spacing="-8">PC</text>
+  <text x="320" y="414" text-anchor="middle" fill="#fff" font-family="DejaVu Sans, sans-serif" font-size="48" font-weight="900" letter-spacing="1">HELP HUB</text>
+</svg>

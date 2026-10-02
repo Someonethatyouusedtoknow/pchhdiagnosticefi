@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# PCHH — storage health: SMART for SATA/SAS and NVMe drives.
+. /usr/local/lib/pchh/common.sh
+
+header "Storage / SSD Health"
+
+if ! have smartctl; then
+    warn "smartctl not available; showing basic device list only."
+fi
+
+# Enumerate physical disks (skip loop/ram/zram).
+disks=""
+if have lsblk; then
+    disks=$(lsblk -dnpo NAME,TYPE 2>/dev/null | awk '$2=="disk"{print $1}')
+fi
+if [ -z "$disks" ]; then
+    disks=$(ls /sys/block 2>/dev/null | grep -Ev '^(loop|ram|zram|fd)' | sed 's#^#/dev/#')
+fi
+
+if [ -z "$disks" ]; then
+    warn "No block devices found."
+    exit 0
+fi
+
+overall_fail=0
+
+for d in $disks; do
+    [ -e "$d" ] || continue
+    section "$d"
+
+    model=$(lsblk -dno MODEL "$d" 2>/dev/null | sed 's/[[:space:]]*$//')
+    vendor=$(lsblk -dno VENDOR "$d" 2>/dev/null | sed 's/[[:space:]]*$//')
+    size=$(lsblk -dno SIZE "$d" 2>/dev/null)
+    rota=$(lsblk -dno ROTA "$d" 2>/dev/null)
+    tran=$(lsblk -dno TRAN "$d" 2>/dev/null)
+    kind="SSD"; [ "$rota" = "1" ] && kind="HDD (rotational)"
+
+    kv "Model"     "${vendor:+$vendor }${model:-unknown}"
+    kv "Size"      "${size:-unknown}"
+    kv "Type"      "$kind"
+    [ -n "$tran" ] && kv "Transport" "$tran"
+
+    have smartctl || continue
+
+    # --- Overall SMART self-assessment -------------------------------------
+    smart=$(smartctl -H "$d" 2>/dev/null)
+    result=$(printf '%s\n' "$smart" \
+        | sed -n 's/.*SMART overall-health self-assessment test result:[[:space:]]*//p' \
+        | head -n1)
+    [ -z "$result" ] && result=$(printf '%s\n' "$smart" \
+        | sed -n 's/.*SMART Health Status:[[:space:]]*//p' | head -n1)
+
+    case "$result" in
+        PASSED|OK)   ok   "SMART health: $result" ;;
+        "")          warn "SMART health: not reported (SMART may be disabled/unsupported)" ;;
+        *)           bad  "SMART health: $result"; overall_fail=1 ;;
+    esac
+
+    # --- Drive-specific wear / error counters ------------------------------
+    if printf '%s' "$d" | grep -q nvme; then
+        if have nvme; then
+            nvme smart-log "$d" 2>/dev/null | awk '
+                /critical_warning/          {printf "  %-22s %s\n",    "Critical warning", $3}
+                /^temperature/              {printf "  %-22s %s %s\n", "Temperature", $3, $4}
+                /available_spare_threshold/ {printf "  %-22s %s\n",    "Spare threshold", $3; next}
+                /available_spare/           {printf "  %-22s %s\n",    "Available spare", $3}
+                /percentage_used/           {printf "  %-22s %s\n",    "Life used", $3}
+                /power_on_hours/            {printf "  %-22s %s\n",    "Power-on hours", $3}
+                /unsafe_shutdowns/          {printf "  %-22s %s\n",    "Unsafe shutdowns", $3}
+                /media_errors/              {printf "  %-22s %s\n",    "Media errors", $3}
+            '
+            cw=$(nvme smart-log "$d" 2>/dev/null | awk '/critical_warning/{print $3; exit}')
+            me=$(nvme smart-log "$d" 2>/dev/null | awk '/media_errors/{print $3; exit}')
+            [ -n "$cw" ] && [ "$cw" != "0" ] && { bad "NVMe critical warning flag set ($cw)"; overall_fail=1; }
+            [ -n "$me" ] && [ "$me" != "0" ] && { bad "NVMe media errors reported ($me)"; overall_fail=1; }
+        fi
+    else
+        smartctl -A "$d" 2>/dev/null | awk '
+            /Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Wear_Leveling_Count|SSD_Life_Left|Percent_Lifetime_Remain|Media_Wearout_Indicator|Temperature_Celsius|Airflow_Temperature_Cel|Power_On_Hours|UDMA_CRC_Error_Count/ {
+                printf "  %-28s %s\n", $2, $10
+            }'
+        realloc=$(smartctl -A "$d" 2>/dev/null | awk '/Reallocated_Sector_Ct/{print $10; exit}')
+        pending=$(smartctl -A "$d" 2>/dev/null | awk '/Current_Pending_Sector/{print $10; exit}')
+        case "$realloc" in (''|*[!0-9]*) : ;; (*) [ "$realloc" -gt 0 ] && { warn "Reallocated sectors: $realloc"; overall_fail=1; } ;; esac
+        case "$pending" in (''|*[!0-9]*) : ;; (*) [ "$pending" -gt 0 ] && { warn "Pending sectors: $pending"; overall_fail=1; } ;; esac
+    fi
+done
+
+echo
+if [ "$overall_fail" -eq 0 ]; then
+    ok "No SMART failures detected on any drive."
+else
+    warn "One or more drives reported a warning/failure above — investigate."
+fi

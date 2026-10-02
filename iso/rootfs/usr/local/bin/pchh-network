@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "Network diagnostics"
+
+section "Interfaces"
+if have ip; then
+    ip -br link 2>/dev/null | sed 's/^/  /'
+    for iface in /sys/class/net/*; do
+        [ -e "$iface" ] || continue
+        name=$(basename "$iface")
+        [ "$name" = lo ] && continue
+        kv "$name carrier" "$(cat "$iface/carrier" 2>/dev/null || echo unknown)"
+        kv "$name speed" "$(cat "$iface/speed" 2>/dev/null || echo unknown) Mbps"
+        kv "$name driver" "$(basename "$(readlink "$iface/device/driver" 2>/dev/null || echo unknown)")"
+    done
+else
+    info "ip is unavailable."
+fi
+
+section "Link errors"
+for iface in /sys/class/net/*; do
+    [ -d "$iface/statistics" ] || continue
+    name=$(basename "$iface")
+    [ "$name" = lo ] && continue
+    rx=$(cat "$iface/statistics/rx_errors" 2>/dev/null || echo 0)
+    tx=$(cat "$iface/statistics/tx_errors" 2>/dev/null || echo 0)
+    kv "$name errors" "RX $rx / TX $tx"
+done
+
+info "No network traffic is generated automatically. DHCP, DNS, ping, and throughput tests should be explicitly selected later."

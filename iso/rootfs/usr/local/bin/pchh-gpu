@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "GPU diagnostics"
+
+section "Detected graphics devices"
+gpus=$(lspci -Dnn 2>/dev/null | grep -Ei 'vga|3d controller|display controller|accelerator' || true)
+if [ -n "$gpus" ]; then
+    printf '%s\n' "$gpus" | sed 's/^/  /'
+else
+    info "No PCI graphics device was reported by the kernel."
+fi
+
+section "Kernel driver binding"
+found=0
+bound=0
+for device in /sys/class/drm/card[0-9]; do
+    [ -e "$device" ] || continue
+    found=1
+    name=$(basename "$device")
+    driver=$(readlink "$device/device/driver" 2>/dev/null || true)
+    kv "$name" "driver=$(basename "${driver:-unbound}")"
+    if [ -n "$driver" ] && [ -e "$device/device/driver" ]; then
+        bound=1
+        ok "$name has a kernel driver bound"
+    else
+        warn "$name has no bound kernel driver"
+    fi
+done
+[ "$found" -eq 0 ] && info "No DRM GPU device is exposed"
+[ "$found" -gt 0 ] && [ "$bound" -eq 0 ] && bad "GPU device has no DRM driver"
+
+section "Render stack"
+if [ "${PCHH_GPU_VISUAL:-1}" -eq 1 ] && have modetest && ls /dev/dri/card* >/dev/null 2>&1; then
+    connector_mode=$(modetest -c 2>/dev/null | awk '$2 == "connected" {id=$1; next} id && $1 ~ /^[0-9]+x[0-9]+/ {print id ":" $1; exit}')
+    if [ -n "$connector_mode" ]; then
+        pattern_log=/tmp/pchh-modetest-$$.log
+        modetest -s "$connector_mode" -F smpte,tiles -v >"$pattern_log" 2>&1
+        pattern_exit=$?
+        sanitize_output < "$pattern_log" | tail -n 12
+        if [ "$pattern_exit" -eq 0 ]; then
+            ok "Automated display color patterns completed"
+        else
+            bad "Display color pattern test failed"
+        fi
+    else
+        if [ -e /dev/fb0 ]; then
+            info "No connector reported; framebuffer available for offscreen rendering"
+        else
+            info "No connector or framebuffer reported; offscreen rendering only"
+        fi
+    fi
+    if have kmscube; then
+        render_log=/tmp/pchh-kmscube-$$.log
+        if [ -n "$connector_mode" ]; then
+            kmscube -D /dev/dri/card0 -M rgba -c 300 >"$render_log" 2>&1
+        else
+            kmscube -D /dev/dri/card0 -M rgba -c 300 -x >"$render_log" 2>&1
+        fi
+        render_exit=$?
+        render_errors=$(dmesg 2>/dev/null | grep -iE 'gpu hang|gpu reset|xid|ring timeout|amdgpu.*error|i915.*error|nouveau.*error|drm.*error' || true)
+        if [ "$render_exit" -eq 0 ] && [ -z "$render_errors" ]; then
+            ok "RGBA shader rendered 300 frames"
+        else
+            bad "RGBA shader render failed"
+        fi
+    fi
+elif have glxinfo; then
+    glxinfo -B 2>/dev/null | sed 's/^/  /' | head -n 30 || warn "glxinfo is present but not reporting a usable GPU stack."
+elif have vulkaninfo; then
+    vulkaninfo 2>/dev/null | sed 's/^/  /' | head -n 30 || warn "vulkaninfo is present but no Vulkan-capable device was detected."
+elif have nvidia-smi; then
+    nvidia-smi -q 2>/dev/null | sed 's/^/  /' | head -n 30 || warn "nvidia-smi is present but no NVIDIA GPU is accessible."
+else
+    info "No DRM render device is available"
+fi
+
+section "GPU temperatures"
+if have sensors; then
+    sensors 2>/dev/null | grep -iE 'gpu|edge|junction|hotspot|amdgpu|nouveau|radeon|nvidia|vddgfx|fan' | sed 's/^/  /' || info "No GPU temperature readings are exposed by sensors."
+else
+    info "sensors unavailable."
+fi
+
+section "GPU error messages"
+errors=$(dmesg 2>/dev/null | grep -iE 'gpu hang|gpu reset|xid|ring timeout|amdgpu.*error|i915.*error|nouveau.*error|radeon.*error|drm.*error' || true)
+if [ -n "$errors" ]; then
+    bad "GPU-related kernel errors detected:"
+    printf '%s\n' "$errors" | sed 's/^/  /'
+else
+    ok "No known GPU hang, reset, or render errors were found in the current kernel log."
+fi
+
+info "Color and shader tests verify the active display path, not every VRAM cell."

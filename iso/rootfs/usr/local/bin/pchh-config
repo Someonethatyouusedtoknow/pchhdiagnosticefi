@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "Configuration audit"
+
+section "Boot"
+kv "Kernel" "$(uname -srmo 2>/dev/null || echo unknown)"
+kv "Command line" "$(cat /proc/cmdline 2>/dev/null || echo unavailable)"
+if [ -d /sys/firmware/efi ]; then
+    ok "UEFI firmware interface available"
+else
+    info "BIOS/CSM boot or EFI variables unavailable"
+fi
+
+section "Virtual filesystems"
+for mountpoint in /proc /sys /dev /dev/pts /run /tmp; do
+    if findmnt -n "$mountpoint" >/dev/null 2>&1; then
+        ok "$mountpoint mounted"
+    else
+        bad "$mountpoint not mounted"
+    fi
+done
+
+section "Device visibility"
+if [ -d /sys/dev/block ] && [ -d /sys/class/block ]; then
+    ok "Kernel block-device tree available"
+else
+    bad "Kernel block-device tree unavailable"
+fi
+if [ -d /sys/class/drm ]; then
+    ok "DRM device tree available"
+else
+    warn "DRM device tree unavailable"
+fi
+
+section "Required tools"
+missing=0
+for command_name in awk blkid findmnt lspci lsblk modprobe mount sensors smartctl stress-ng; do
+    if have "$command_name"; then
+        ok "$command_name available"
+    else
+        bad "$command_name missing"
+        missing=1
+    fi
+done
+[ "$missing" -eq 0 ] && ok "Required diagnostic tools available"
+
+section "Kernel drivers"
+for module in xhci-pci usb-storage uas sd_mod scsi_mod drm; do
+    if grep -q "$(printf '%s' "$module" | tr '-' '_')" /proc/modules 2>/dev/null; then
+        ok "$module loaded"
+    elif find "/lib/modules/$(uname -r)" -iname "${module}.ko*" 2>/dev/null | head -n1 | grep -q .; then
+        info "$module available but not loaded"
+    else
+        warn "$module unavailable"
+    fi
+done
+
+section "Writable report target"
+if device=$(find_pchh_data_device); then
+    kv "PCHH_DATA" "$device"
+    if mountpoint=$(findmnt -n -o TARGET "$device" 2>/dev/null); then
+        ok "PCHH_DATA mounted at $mountpoint"
+    else
+        info "PCHH_DATA detected but not mounted"
+    fi
+else
+    warn "PCHH_DATA not detected"
+fi
+
+section "Firmware"
+if [ -d /lib/firmware ]; then
+    firmware_count=$(find /lib/firmware -type f 2>/dev/null | wc -l)
+    kv "Firmware files" "$firmware_count"
+else
+    warn "Firmware directory unavailable"
+fi
+
+section "Summary"
+if [ "$missing" -eq 0 ] && [ -d /sys/dev/block ]; then
+    ok "Configuration audit completed"
+else
+    bad "Configuration issues detected"
+fi

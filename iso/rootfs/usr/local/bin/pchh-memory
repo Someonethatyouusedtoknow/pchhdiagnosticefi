@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# PCHH — RAM: installed capacity, DIMM inventory, and a live stress check.
+. /usr/local/lib/pchh/common.sh
+
+header "RAM / Memory"
+
+section "Capacity"
+if [ -r /proc/meminfo ]; then
+    total=$(awk '/^MemTotal:/{printf "%.1f GiB", $2/1024/1024}' /proc/meminfo)
+    avail=$(awk '/^MemAvailable:/{printf "%.1f GiB", $2/1024/1024}' /proc/meminfo)
+    kv "Usable total" "$total"
+    kv "Available"    "$avail"
+fi
+if have dmidecode; then
+    maxcap=$(dmidecode -t memory 2>/dev/null | sed -n 's/^[[:space:]]*Maximum Capacity:[[:space:]]*//p' | head -n1)
+    slots=$(dmidecode -t memory 2>/dev/null | sed -n 's/^[[:space:]]*Number Of Devices:[[:space:]]*//p' | head -n1)
+    kv "Max supported" "${maxcap:-unknown}"
+    kv "Total slots"   "${slots:-unknown}"
+fi
+
+section "Installed modules"
+printf '  %-14s %-9s %-13s %-18s %s\n' LOCATOR SIZE TYPE MANUFACTURER "PART NUMBER"
+list_dimms
+
+section "Speed / voltage detail"
+if have dmidecode; then
+    dmidecode -t memory 2>/dev/null \
+        | grep -E 'Configured (Memory|Clock) Speed|^[[:space:]]*Speed:|Configured Voltage|Minimum Voltage' \
+        | grep -v 'Unknown' | sed 's/^[[:space:]]*/  /' | head -n 20
+fi
+
+section "Live RAM stress test"
+if [ "${PCHH_RAM_MODE:-live}" = memtest ]; then
+    warn "Memtest86+ selected; reboot to run it."
+elif have memtester; then
+    if [ -r /proc/meminfo ]; then
+        mem_mb=$(awk '/^MemAvailable:/{print int($2/1024)-256}' /proc/meminfo)
+        [ "$mem_mb" -lt 64 ] && mem_mb=64
+        kv "test size" "${mem_mb}M"
+        info "Running a short memtester pass..."
+        if timeout 120s memtester "${mem_mb}M" 1 > /tmp/pchh-memtester.out 2>&1; then
+            sanitize_output < /tmp/pchh-memtester.out | sed 's/^/  /'
+            ok "memtester completed without reporting RAM errors."
+        else
+            sanitize_output < /tmp/pchh-memtester.out | sed 's/^/  /'
+            bad "memtester reported RAM errors or aborted."
+        fi
+    else
+        warn "Unable to determine available memory; skipping live RAM stress test."
+    fi
+elif have stress-ng; then
+    kv "test type" "stress-ng memory pressure"
+    info "Running a short memory-pressure pass..."
+    stress-ng --vm 1 --vm-bytes 75% --timeout 30s --metrics-brief > /tmp/pchh-memory-stress.out 2>&1
+    stress_result=$?
+    sanitize_output < /tmp/pchh-memory-stress.out | sed 's/^/  /'
+    if [ "$stress_result" -eq 0 ]; then
+        ok "Memory pressure test completed without kernel faults."
+    else
+        bad "Memory pressure test reported errors or aborted."
+    fi
+else
+    warn "No live memory-test tool is available in this environment."
+    info "Use the Memtest86+ entry from the GRUB menu for a full RAM test."
+fi
+
+printf '\n'
+info "This checks what the firmware and the live OS can detect. For a complete"
+info "bit-level RAM test, boot the Memtest86+ entry from the GRUB menu."

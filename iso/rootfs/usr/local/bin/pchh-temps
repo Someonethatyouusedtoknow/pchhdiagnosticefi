@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# PCHH — temperatures, fans and voltages.
+. /usr/local/lib/pchh/common.sh
+
+header "Temperatures / Fans / Voltages"
+
+section "lm-sensors"
+if have sensors; then
+    if sensors 2>/dev/null | grep -q .; then
+        sensors 2>/dev/null | sed 's/^/  /'
+    else
+        info "No sensor chips detected (may need a vendor driver)."
+    fi
+else
+    info "lm-sensors not available"
+fi
+
+section "ACPI thermal zones"
+found=0
+for z in /sys/class/thermal/thermal_zone*; do
+    [ -e "$z/temp" ] || continue
+    ty=$(cat "$z/type" 2>/dev/null)
+    t=$(cat "$z/temp" 2>/dev/null)
+    [ -z "$t" ] && continue
+    found=1
+    kv "${ty:-zone}" "$(awk -v x="$t" 'BEGIN{printf "%.1f C", x/1000}')"
+done
+[ "$found" -eq 0 ] && info "No ACPI thermal zones exposed."
+
+section "NVMe drive temperatures"
+nfound=0
+if have nvme; then
+    for n in /dev/nvme[0-9]; do
+        [ -e "$n" ] || continue
+        tt=$(nvme smart-log "$n" 2>/dev/null | awk '/^temperature/{print $3, $4; exit}')
+        [ -n "$tt" ] && { kv "$(basename "$n")" "$tt"; nfound=1; }
+    done
+fi
+[ "$nfound" -eq 0 ] && info "No NVMe drives or nvme-cli unavailable."

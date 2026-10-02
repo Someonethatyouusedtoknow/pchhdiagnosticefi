@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "BIOS / Firmware audit"
+
+section "Platform"
+kv "Boot mode" "$(if [ -d /sys/firmware/efi ]; then echo UEFI; else echo Legacy BIOS; fi)"
+kv "Secure Boot" "$(if [ -r /sys/firmware/efi/efivars/SecureBoot-* ]; then od -An -t u1 /sys/firmware/efi/efivars/SecureBoot-* 2>/dev/null | awk '{print $NF ? "enabled" : "disabled"}'; else echo unavailable; fi)"
+kv "TPM device" "$(if [ -e /dev/tpm0 ] || [ -e /dev/tpmrm0 ]; then echo present; else echo not detected; fi)"
+kv "BIOS vendor" "$(dmi bios-vendor)"
+kv "BIOS version" "$(dmi bios-version)"
+kv "BIOS date" "$(dmi bios-release-date)"
+
+section "Firmware tables"
+if have dmidecode; then
+    dmidecode -t bios 2>/dev/null | grep -E 'Vendor:|Version:|Release Date:|Characteristics:' | sed 's/^/  /'
+else
+    info "dmidecode unavailable."
+fi
+
+section "UEFI variables"
+if [ -d /sys/firmware/efi/efivars ]; then
+    count=$(find /sys/firmware/efi/efivars -maxdepth 1 -type f 2>/dev/null | wc -l)
+    kv "variable count" "$count"
+    ok "UEFI runtime variables are accessible read-only."
+else
+    info "UEFI variables unavailable in legacy boot mode."
+fi
+
+section "Security notes"
+info "This audit reads firmware state only; it does not change BIOS settings."
+info "Vendor-specific setup options may not be exposed to Linux."

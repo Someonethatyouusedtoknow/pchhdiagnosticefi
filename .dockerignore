@@ -1,0 +1,7 @@
+# Keep the Docker build context small — only iso/ and build/ are needed.
+.git
+dist
+*.iso
+*.md
+Makefile
+.DS_Store

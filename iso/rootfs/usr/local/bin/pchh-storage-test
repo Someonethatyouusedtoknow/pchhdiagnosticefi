@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "Read-only storage checks"
+
+section "Filesystem checks"
+found=0
+while read -r device mountpoint fstype; do
+    [ -n "$device" ] || continue
+    case "$fstype" in
+        ext2|ext3|ext4|xfs|btrfs|vfat|ntfs) ;;
+        *) continue ;;
+    esac
+    found=1
+    kv "filesystem" "$device $fstype ${mountpoint:-unmounted}"
+    if [ -n "$mountpoint" ] && [ "$mountpoint" != "-" ]; then
+        info "Skipped mounted filesystem to avoid interfering with a live mount."
+    elif have fsck; then
+        fsck -n "$device" >/tmp/pchh-fsck.out 2>&1 || true
+        if grep -qiE 'clean|no errors|FILE SYSTEM WAS MODIFIED' /tmp/pchh-fsck.out; then
+            ok "$device completed a read-only filesystem check"
+        else
+            warn "$device needs review; output follows"
+            sed 's/^/  /' /tmp/pchh-fsck.out
+        fi
+    fi
+done <<EOF
+$(lsblk -pnro NAME,MOUNTPOINT,FSTYPE 2>/dev/null)
+EOF
+[ "$found" -eq 0 ] && while read -r device; do
+    [ -n "$device" ] || continue
+    fstype=$(blkid -o value -s TYPE "$device" 2>/dev/null || true)
+    case "$fstype" in
+        ext2|ext3|ext4|xfs|btrfs|vfat|ntfs) found=1; kv "filesystem" "$device $fstype" ;;
+    esac
+done <<EOF
+$(blkid -o device 2>/dev/null)
+EOF
+[ "$found" -eq 0 ] && info "No supported filesystems detected."
+
+section "I/O errors"
+ioerrors=$(dmesg 2>/dev/null | grep -iE 'I/O error|medium error|uncorrectable|end_request' || true)
+[ -n "$ioerrors" ] && { bad "Storage I/O errors found in the kernel log:"; printf '%s\n' "$ioerrors"; } || ok "No storage I/O errors found in the current kernel log."
+
+info "No filesystem repair or disk writes are performed."

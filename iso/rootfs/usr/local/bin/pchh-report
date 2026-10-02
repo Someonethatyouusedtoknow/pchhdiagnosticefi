@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# PCHH — run every check and produce one consolidated report.
+. /usr/local/lib/pchh/common.sh
+
+REPORT="/tmp/pchh-report-$(date +%Y%m%d-%H%M%S).txt"
+load_settings
+usb_export=0
+identify=0
+for argument in "$@"; do
+    [ "$argument" = --usb ] && usb_export=1
+    [ "$argument" = --identify ] && identify=1
+done
+
+find_pchh_data_device() {
+    local label device candidates
+
+    if [ ! -d /sys/dev/block ] || [ ! -d /sys/class/block ]; then
+        warn "Kernel block-device info is unavailable: /sys is not mounted or sysfs is empty. USB detection is impossible in this boot."
+        return 1
+    fi
+
+    have blkid || return 1
+    device=$(blkid -t LABEL=PCHH_DATA -o device 2>/dev/null | head -n 1)
+    if [ -n "$device" ]; then
+        printf '%s\n' "$device"
+        return 0
+    fi
+
+    while read -r candidate; do
+        [ -n "$candidate" ] || continue
+        label=$(blkid "$candidate" 2>/dev/null | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
+        if [ "$label" = "PCHH_DATA" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done <<EOF
+$(lsblk -dnpo NAME 2>/dev/null | awk '$0 ~ /^(\/dev\/sd|\/dev\/nvme|\/dev\/mmcblk)/ {print}')
+EOF
+
+    for candidate in /dev/sd* /dev/nvme* /dev/mmcblk*; do
+        [ -e "$candidate" ] || continue
+        label=$(blkid "$candidate" 2>/dev/null | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
+        if [ "$label" = "PCHH_DATA" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+export_report_to_usb() {
+    local device mountpoint mounted_here=0 target
+
+    device=$(find_pchh_data_device) || {
+        warn "PCHH_DATA partition not found or USB block devices are not visible in this boot. Report remains at $REPORT"
+        return 1
+    }
+
+    mountpoint=$(findmnt -n -o TARGET "$device" 2>/dev/null || true)
+    if [ -z "$mountpoint" ]; then
+        mountpoint=/mnt/pchh-usb
+        mkdir -p "$mountpoint"
+        if ! mount "$device" "$mountpoint" 2>/dev/null; then
+            warn "Could not mount $device. Report remains at $REPORT"
+            return 1
+        fi
+        mounted_here=1
+    fi
+
+    target="$mountpoint/$(basename "$REPORT")"
+    if cp -f "$REPORT" "$target" 2>/dev/null && [ -s "$target" ]; then
+        sync
+        ok "Report saved to USB: $target"
+        [ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true
+        return 0
+    fi
+
+    [ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true
+    warn "Could not write to $device. Report remains at $REPORT"
+    return 1
+}
+
+report_step_name() {
+    case "$1" in
+        pchh-bios) echo "BIOS and firmware" ;;
+        pchh-manufacturers) echo "Component manufacturers" ;;
+        pchh-components) echo "Component overview" ;;
+        pchh-memory) echo "RAM inventory and stress test" ;;
+        pchh-ecc) echo "ECC and machine checks" ;;
+        pchh-storage) echo "Disk health and SMART" ;;
+        pchh-battery) echo "Battery health" ;;
+        pchh-pcie) echo "PCIe links and errors" ;;
+        pchh-temps) echo "Temperatures and fans" ;;
+        pchh-bios-audit) echo "BIOS audit" ;;
+        pchh-cpu-test) echo "CPU and thermal load" ;;
+        pchh-gpu) echo "GPU and display test" ;;
+        pchh-usb-test) echo "USB write test" ;;
+        pchh-storage-test) echo "Read-only filesystem checks" ;;
+        pchh-network) echo "Network interfaces" ;;
+        pchh-peripherals) echo "USB and audio peripherals" ;;
+        pchh-config) echo "Configuration audit" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+{
+    echo "############################################################"
+    echo "# PCHH - PC Health Check report"
+    echo "# Generated : $(date)"
+    echo "# Kernel    : $(uname -srmo 2>/dev/null)"
+    echo "# Host      : $(dmi system-manufacturer) $(dmi system-product-name)"
+    echo "# Verbose   : $([ "$PCHH_VERBOSE" -eq 1 ] && echo yes || echo no)"
+    echo "############################################################"
+} > "$REPORT"
+
+echo
+echo "  Running full diagnostic"
+echo "  Detailed results are being saved to $REPORT"
+echo
+
+for s in pchh-config pchh-bios pchh-manufacturers pchh-components \
+         pchh-memory pchh-ecc pchh-storage pchh-battery \
+         pchh-pcie pchh-temps pchh-bios-audit pchh-cpu-test \
+         pchh-gpu pchh-usb-test pchh-storage-test pchh-network pchh-peripherals; do
+    [ "$s" = pchh-config ] && [ "$identify" -ne 1 ] && continue
+    have "$s" || continue
+    name=$(report_step_name "$s")
+    raw="/tmp/pchh-${s}-$$.out"
+    printf '\n== %s ==\n' "$name" >> "$REPORT"
+    if [ "$PCHH_VERBOSE" -eq 1 ] || [ ! -t 1 ]; then
+        printf '  %s\n' "$name"
+        "$s" > "$raw" 2>&1
+        result=$?
+        sanitize_output < "$raw" | tee -a "$REPORT"
+    else
+        printf '  %-42s ' "$name"
+        "$s" > "$raw" 2>&1 &
+        pid=$!
+        spinner='|/-\\'
+        spin=0
+        while kill -0 "$pid" 2>/dev/null; do
+            printf '\b%s' "${spinner:$spin:1}"
+            spin=$(( (spin + 1) % 4 ))
+            sleep 0.2
+        done
+        wait "$pid"
+        result=$?
+        sanitize_output < "$raw" >> "$REPORT"
+        if [ "$result" -eq 0 ]; then
+            printf '\bOK\n'
+        else
+            printf '\bFAIL\n'
+        fi
+    fi
+    rm -f "$raw"
+done
+
+cat >> "$REPORT" <<'EOF'
+
+############################################################
+# End of report
+############################################################
+EOF
+
+echo
+info "Report generated at: $REPORT"
+if [ "$usb_export" -eq 1 ]; then
+    export_report_to_usb || true
+else
+    info "To keep it: choose Diagnose all from the menu with a USB inserted."
+fi

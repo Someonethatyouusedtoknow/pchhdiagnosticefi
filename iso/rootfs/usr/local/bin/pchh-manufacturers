@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# PCHH — who made each part (system, board, CPU, RAM, disks, chipset).
+. /usr/local/lib/pchh/common.sh
+
+header "Component Manufacturers"
+
+section "System"
+kv "Manufacturer"  "$(dmi system-manufacturer || echo unknown)"
+kv "Product name"  "$(dmi system-product-name || echo unknown)"
+kv "Version"       "$(dmi system-version || echo -)"
+kv "Serial number" "$(dmi system-serial-number || echo -)"
+kv "Family"        "$(dmi system-family || echo -)"
+
+section "Baseboard (motherboard)"
+kv "Manufacturer"  "$(dmi baseboard-manufacturer || echo unknown)"
+kv "Product name"  "$(dmi baseboard-product-name || echo unknown)"
+kv "Version"       "$(dmi baseboard-version || echo -)"
+kv "Serial number" "$(dmi baseboard-serial-number || echo -)"
+
+section "Chassis"
+kv "Manufacturer"  "$(dmi chassis-manufacturer || echo unknown)"
+kv "Type"          "$(dmi chassis-type || echo -)"
+kv "Serial number" "$(dmi chassis-serial-number || echo -)"
+
+section "Processor"
+if have lscpu; then
+    kv "Vendor"      "$(lscpu | sed -n 's/^Vendor ID:[[:space:]]*//p')"
+    kv "Model name"  "$(lscpu | sed -n 's/^Model name:[[:space:]]*//p')"
+    kv "BIOS Model"  "$(lscpu | sed -n 's/^BIOS Model name:[[:space:]]*//p')"
+elif [ -r /proc/cpuinfo ]; then
+    kv "Model name"  "$(sed -n 's/^model name[[:space:]]*:[[:space:]]*//p' /proc/cpuinfo | head -n1)"
+fi
+
+section "Memory modules"
+printf '  %-14s %-9s %-13s %-18s %s\n' LOCATOR SIZE TYPE MANUFACTURER "PART NUMBER"
+list_dimms
+
+section "Storage devices"
+if have lsblk; then
+    for d in $(lsblk -dnpo NAME,TYPE 2>/dev/null | awk '$2=="disk"{print $1}'); do
+        ven=$(lsblk -dno VENDOR "$d" 2>/dev/null | sed 's/[[:space:]]*$//')
+        mod=$(lsblk -dno MODEL  "$d" 2>/dev/null | sed 's/[[:space:]]*$//')
+        printf '  %-12s %s %s\n' "$d" "$ven" "$mod"
+    done
+else
+    info "lsblk not available"
+fi
+
+section "PCI device classes"
+if have lspci; then
+    lspci 2>/dev/null | sed 's/^[^ ]* //; s/:.*//' | sort | uniq -c \
+        | sort -rn | sed 's/^/  /'
+else
+    info "lspci not available"
+fi

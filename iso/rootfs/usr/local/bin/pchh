@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# PCHH — interactive menu. Launched by /init; the face of the diagnostic OS.
+. /usr/local/lib/pchh/common.sh
+
+banner() {
+    printf '\033[2J\033[H'
+    printf '%s\n' '================================================================'
+    printf '                 P C H H   D I A G N O S T I C S\n'
+    printf '%s\n' '================================================================'
+    printf '  PC diagnostics and configuration audit\n'
+}
+
+mkdir -p /run/pchh
+load_settings
+
+run_result() {
+    run_result_with_args "$1"
+}
+
+run_result_with_args() {
+    local command_name="$1" result_file
+    result_file="/tmp/pchh-last-result.txt"
+    shift
+    "$command_name" "$@" > "$result_file" 2>&1
+    cat "$result_file"
+}
+
+finish_result() {
+    printf '\n  Press Enter to return, or s to save this result to USB: '
+    read -r action
+    [ "$action" = s ] && save_result_to_usb /tmp/pchh-last-result.txt
+}
+
+while true; do
+    banner
+    echo
+    echo '  QUICK CHECKS'
+    echo '   1) Diagnose all        2) Identify system'
+    echo '   3) Component overview   4) RAM test'
+    echo '   5) CPU / thermal test   6) GPU diagnostics'
+    echo '   7) USB write test'
+    echo
+    echo '  HARDWARE DETAIL'
+    echo '   8) Storage / SSD        9) Temperatures / fans'
+    echo '  10) BIOS / firmware     11) Manufacturers'
+    echo '  12) PCIe                13) ECC / machine checks'
+    echo '  14) Battery             15) Network / peripherals'
+    echo '  16) Read-only storage   17) Settings'
+    echo '  18) Live shell'
+    echo
+    echo "   r) Reboot        s) Power off"
+    printf '  Current: CPU %ss | RAM %s | Verbose %s\n' "$PCHH_CPU_SECONDS" "$PCHH_RAM_MODE" "$([ "$PCHH_VERBOSE" -eq 1 ] && echo on || echo off)"
+    echo
+    printf '  Choose an option: '
+    read -r choice
+    case "$choice" in
+        1) if [ "$PCHH_AUTO_USB_REPORT" -eq 1 ]; then
+               run_result_with_args pchh-report --usb
+           else
+               run_result pchh-report
+           fi
+           finish_result ;;
+        2) run_result_with_args pchh-report --identify "$([ "$PCHH_AUTO_USB_REPORT" -eq 1 ] && echo --usb)"; finish_result ;;
+        3) run_result pchh-components;    finish_result ;;
+        4) run_result pchh-memory;        finish_result ;;
+        5) run_result pchh-cpu-test;      finish_result ;;
+        6) run_result pchh-gpu;           finish_result ;;
+        7) run_result pchh-usb-test;      finish_result ;;
+        8) run_result pchh-storage;       finish_result ;;
+        9) run_result pchh-temps;         finish_result ;;
+        10) run_result pchh-bios;         finish_result ;;
+        11) run_result pchh-manufacturers; finish_result ;;
+        12) run_result pchh-pcie;         finish_result ;;
+        13) run_result pchh-ecc;          finish_result ;;
+        14) run_result pchh-battery;      finish_result ;;
+        15) run_result pchh-network; run_result pchh-peripherals; finish_result ;;
+        16) run_result pchh-storage-test; finish_result ;;
+        17) pchh-settings; load_settings ;;
+        18) echo "  Entering live shell. Type 'exit' to return to the menu."
+           export PS1='pchh# '
+           if have bash; then bash; else /bin/sh; fi ;;
+        r|R) reboot -f ;;
+        s|S) poweroff -f ;;
+        *) : ;;
+    esac
+done

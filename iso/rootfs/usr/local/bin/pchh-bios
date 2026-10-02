@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# PCHH — BIOS / firmware version and details.
+. /usr/local/lib/pchh/common.sh
+
+header "BIOS / Firmware"
+
+if ! have dmidecode; then
+    warn "dmidecode not available; cannot read firmware tables."
+    exit 0
+fi
+
+section "BIOS"
+kv "Vendor"        "$(dmi bios-vendor || echo unknown)"
+kv "Version"       "$(dmi bios-version || echo unknown)"
+kv "Release date"  "$(dmi bios-release-date || echo unknown)"
+
+section "Firmware mode"
+if [ -d /sys/firmware/efi ]; then
+    ok "Booted in UEFI mode"
+    [ -r /sys/firmware/efi/fw_platform_size ] && \
+        kv "UEFI bitness" "$(cat /sys/firmware/efi/fw_platform_size)-bit"
+else
+    info "Legacy BIOS boot (or UEFI runtime services unavailable)."
+fi
+
+section "Firmware characteristics"
+dmidecode -t bios 2>/dev/null \
+    | sed -n '/BIOS Information/,/^Handle /p' \
+    | grep -Ei 'ROM Size|Runtime Size|Address:|Revision' \
+    | sed 's/^[[:space:]]*/  /'
+
+section "Embedded controller"
+dmidecode 2>/dev/null | grep -Ei 'Embedded Controller' | sed 's/^[[:space:]]*/  /' \
+    || info "none reported"

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+. /usr/local/lib/pchh/common.sh
+
+header "USB / audio peripherals"
+
+section "USB devices"
+if have lsusb; then
+    lsusb -t 2>/dev/null | sed 's/^/  /'
+    lsusb 2>/dev/null | sed 's/^/  /'
+else
+    info "lsusb unavailable."
+fi
+
+section "USB kernel errors"
+usb_errors=$(dmesg 2>/dev/null | grep -iE 'usb.*(error|reset|disconnect|descriptor)' || true)
+[ -n "$usb_errors" ] && { warn "USB errors or resets found:"; printf '%s\n' "$usb_errors"; } || ok "No USB errors found in the current kernel log."
+
+section "Audio devices"
+if have aplay; then
+    aplay -l 2>/dev/null | sed 's/^/  /' || info "No playback devices detected."
+else
+    info "ALSA utilities unavailable; audio inventory is not available."
+fi
+if have arecord; then
+    arecord -l 2>/dev/null | sed 's/^/  /' || info "No capture devices detected."
+fi
+
+info "Audio playback and microphone tests require user confirmation and are not run automatically."
