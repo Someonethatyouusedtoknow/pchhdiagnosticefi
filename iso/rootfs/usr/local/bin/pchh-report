@@ -4,6 +4,7 @@
 
 REPORT="/tmp/pchh-report-$(date +%Y%m%d-%H%M%S).txt"
 load_settings
+TEST_TIMEOUT=${PCHH_TEST_TIMEOUT:-120}
 usb_export=0
 identify=0
 for argument in "$@"; do
@@ -130,12 +131,12 @@ for s in pchh-config pchh-bios pchh-manufacturers pchh-components \
     printf '\n== %s ==\n' "$name" >> "$REPORT"
     if [ "$PCHH_VERBOSE" -eq 1 ] || [ ! -t 1 ]; then
         printf '  %s\n' "$name"
-        "$s" > "$raw" 2>&1
+        timeout "${TEST_TIMEOUT}s" "$s" > "$raw" 2>&1
         result=$?
         sanitize_output < "$raw" | tee -a "$REPORT"
     else
         printf '  %-42s ' "$name"
-        "$s" > "$raw" 2>&1 &
+        timeout "${TEST_TIMEOUT}s" "$s" > "$raw" 2>&1 &
         pid=$!
         spinner='|/-\\'
         spin=0
@@ -147,7 +148,10 @@ for s in pchh-config pchh-bios pchh-manufacturers pchh-components \
         wait "$pid"
         result=$?
         sanitize_output < "$raw" >> "$REPORT"
-        if [ "$result" -eq 0 ]; then
+        if [ "$result" -eq 124 ]; then
+            printf '\bTIMEOUT\n'
+            printf '  TIMEOUT after %ss\n' "$TEST_TIMEOUT" >> "$REPORT"
+        elif [ "$result" -eq 0 ]; then
             printf '\bOK\n'
         else
             printf '\bFAIL\n'

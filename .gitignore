@@ -5,3 +5,11 @@ dist/
 # Editor / OS cruft
 .DS_Store
 *.swp
+
+# Local Microsoft ADK/WinPE build inputs (licensed binaries, not committed)
+WinPE_amd64/
+winpe/*
+!winpe/.gitkeep
+# ...but DO track our own repair menu and the bundled open storage drivers
+!winpe/Windows/
+!winpe/drivers/

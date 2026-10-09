@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Inspect and repair common offline Windows UEFI boot problems.
+. /usr/local/lib/pchh/common.sh
+
+header "Windows / EFI recovery"
+have lsblk || { bad "lsblk is unavailable"; exit 1; }
+
+section "Candidate Windows volumes"
+windows_volumes=$(lsblk -rpno NAME,FSTYPE,SIZE,LABEL 2>/dev/null | awk '$2=="ntfs" || $2=="BitLocker"')
+[ -n "$windows_volumes" ] && printf '%s\n' "$windows_volumes" || warn "No NTFS Windows volume found (BitLocker may be locked)"
+
+section "EFI system partitions"
+esps=$(lsblk -rpno NAME,FSTYPE,PARTTYPE,SIZE,LABEL 2>/dev/null | awk 'tolower($2)=="vfat" || tolower($3)=="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"')
+[ -n "$esps" ] || { bad "No FAT EFI System Partition found"; exit 1; }
+printf '%s\n' "$esps"
+
+printf '\n  Enter ESP device to inspect (example /dev/nvme0n1p1): '
+read -r esp
+case "$esp" in /dev/*) ;; *) bad "Invalid device"; exit 1 ;; esac
+[ -b "$esp" ] || { bad "Block device not found: $esp"; exit 1; }
+fstype=$(blkid -o value -s TYPE "$esp" 2>/dev/null)
+[ "$fstype" = vfat ] || { bad "Selected partition is not FAT: $fstype"; exit 1; }
+
+mountpoint=/mnt/pchh-esp
+mkdir -p "$mountpoint"
+mounted_here=0
+if ! findmnt -n "$mountpoint" >/dev/null 2>&1; then
+    mount -o rw "$esp" "$mountpoint" 2>/dev/null || { bad "Could not mount $esp"; exit 1; }
+    mounted_here=1
+fi
+
+bootdir="$mountpoint/EFI/Microsoft/Boot"
+bootmgfw="$bootdir/bootmgfw.efi"
+bcd="$bootdir/BCD"
+section "Windows boot files"
+[ -f "$bootmgfw" ] && ok "Microsoft boot manager present" || bad "Microsoft boot manager missing"
+[ -s "$bcd" ] && ok "BCD store present ($(du -h "$bcd" | awk '{print $1}'))" || warn "BCD store missing or empty"
+
+section "Repair menu"
+echo "  1) Recreate Windows UEFI firmware entry"
+echo "  2) Back up EFI files and BCD"
+echo "  3) Show Windows recovery commands"
+echo "  4) Inspect/export BCD entries"
+echo "  5) Create a Windows Recovery repair script"
+echo "  6) Return without changes"
+printf '  Choose: '
+read -r action
+
+case "$action" in
+    1)
+        if [ ! -f "$bootmgfw" ]; then
+            bad "Cannot create entry: bootmgfw.efi is missing"
+        else
+            parent=$(lsblk -no PKNAME "$esp" 2>/dev/null)
+            partno=$(lsblk -no PARTN "$esp" 2>/dev/null)
+            printf '  Add a Windows Boot Manager NVRAM entry for %s? [y/N] ' "$esp"
+            read -r answer
+            if { [ "$answer" = y ] || [ "$answer" = Y ]; } && [ -n "$parent" ] && [ -n "$partno" ] && have efibootmgr; then
+                efibootmgr -c -d "/dev/$parent" -p "$partno" -L "Windows Boot Manager" -l '\EFI\Microsoft\Boot\bootmgfw.efi' \
+                    && ok "Windows UEFI entry created" || bad "efibootmgr failed; files unchanged"
+            else
+                info "No changes made (entry creation needs UEFI boot and efibootmgr)"
+            fi
+        fi
+        ;;
+    2)
+        backup="$mountpoint/EFI/PCHH-backup-$(date +%Y%m%d-%H%M%S)"
+        printf '  Back up the Microsoft EFI directory to %s? [y/N] ' "$backup"
+        read -r answer
+        if { [ "$answer" = y ] || [ "$answer" = Y ]; } && [ -d "$bootdir" ]; then
+            mkdir -p "$backup"
+            cp -a "$bootdir" "$backup/" && sync && ok "EFI backup created at $backup" || bad "Backup failed"
+        elif [ ! -d "$bootdir" ]; then
+            warn "Microsoft EFI directory not present"
+        else
+            info "No changes made"
+        fi
+        ;;
+    3)
+        section "Windows Recovery Environment commands"
+        info "Unlock BitLocker first if needed, then identify Windows and EFI drive letters with diskpart/list volume."
+        info "Rebuild boot files: bcdboot D:\\Windows /s S: /f UEFI"
+        info "Scan and repair filesystem: chkdsk D: /f"
+        info "Offline system file check: sfc /scannow /offbootdir=S:\\ /offwindir=D:\\Windows"
+        info "Replace D: and S: with the actual Windows and EFI volumes in WinRE."
+        info "Boot PCHH cannot run bcdboot: it is a Microsoft Windows tool, and copying generic BCD files is unsafe."
+        ;;
+    4)
+        if [ ! -s "$bcd" ] || ! have hivexregedit; then
+            bad "BCD or hivexregedit is unavailable"
+        else
+            backup="/tmp/pchh-bcd-export-$(date +%Y%m%d-%H%M%S).reg"
+            if hivexregedit --export "$bcd" '\\' > "$backup" 2>/dev/null; then
+                ok "BCD registry export saved at $backup"
+                info "BCD changes and Safe Mode toggles are performed most reliably with bcdedit in Windows Recovery Environment."
+            else
+                bad "Could not parse this BCD store"
+            fi
+        fi
+        ;;
+    5)
+        printf '  Windows volume letter in WinRE (default D): '
+        read -r winletter
+        [ -n "$winletter" ] || winletter=D
+        printf '  EFI volume letter in WinRE (default S): '
+        read -r efiletter
+        [ -n "$efiletter" ] || efiletter=S
+        case "$winletter$efiletter" in *[!A-Za-z]*) bad "Drive letters must be alphabetic"; winletter=D; efiletter=S ;; esac
+        script=/tmp/PCHH-Windows-Repair.cmd
+        {
+            echo '@echo off'
+            echo 'echo PCHH Windows offline repair'
+            echo "echo Windows volume: ${winletter}:   EFI volume: ${efiletter}:"
+            echo 'echo Verify these letters in diskpart before continuing.'
+            echo 'pause'
+            echo "bcdboot ${winletter}:\\Windows /s ${efiletter}: /f UEFI"
+            echo "chkdsk ${winletter}: /f"
+            echo "sfc /scannow /offbootdir=${efiletter}:\\ /offwindir=${winletter}:\\Windows"
+            echo 'echo To enable Safe Mode for the next boot:'
+            echo "bcdedit /store ${efiletter}:\\EFI\\Microsoft\\Boot\\BCD /set {default} safeboot minimal"
+            echo 'echo To remove the Safe Mode setting later:'
+            echo "bcdedit /store ${efiletter}:\\EFI\\Microsoft\\Boot\\BCD /deletevalue {default} safeboot"
+            echo 'pause'
+        } > "$script"
+        if save_result_to_usb "$script"; then
+            ok "Repair script copied to the PCHH_DATA USB"
+        else
+            info "Script remains available at $script"
+        fi
+        ;;
+    *) info "No changes made" ;;
+esac
+
+[ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true
+pause

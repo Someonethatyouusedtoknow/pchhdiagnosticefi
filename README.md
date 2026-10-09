@@ -118,6 +118,22 @@ flashed to a stick.
 make iso          # produces dist/pchh.iso and dist/pchh-usb.img
 ```
 
+### Optional WinPE integration
+
+An official Microsoft ADK `WinPE_amd64` tree can be included as a second boot
+environment. Stage it before building:
+
+```sh
+make prepare-winpe WINPE_DIR=/path/to/WinPE_amd64
+make iso
+```
+
+The tree must contain `EFI/Microsoft/Boot/bootmgfw.efi` and
+`sources/boot.wim`. The build adds a `PCHH - Windows PE (ADK)` GRUB entry;
+Windows-native tools such as `bcdboot`, `bcdedit`, DISM, SFC, and Startup
+Repair then run in their supported environment. The staged `winpe/` contents
+are local build input and are not committed to this repository.
+
 Or directly:
 
 ```sh
@@ -144,7 +160,27 @@ with `make test QEMU_MACHINE=pc` if needed.
 ```sh
 make test-usb     # boot the PCHH_DATA USB image in QEMU (q35 + xHCI)
 make test-uefi    # UEFI boot via OVMF (Linux hosts with OVMF installed)
+make test-pe-uefi # UEFI boot with optimized settings for x86 emulation on Apple Silicon
 ```
+
+### Testing Windows PE integration
+
+When a WinPE tree has been staged and built into the image:
+
+```sh
+make test-usb-winpe   # boot USB image with GRUB → Windows PE menu option
+```
+
+This target uses optimized QEMU settings for Apple Silicon hosts:
+- Single-threaded TCG emulation (`-accel tcg,thread=single`)
+- Conservative CPU profile (`-cpu Haswell-v4,-tsc-deadline`)
+- Single core (`-smp 1`) to avoid AP initialization races
+- 2GB RAM for Windows PE's in-memory boot.wim
+- VGA display for Windows Boot Manager's graphical output
+
+**Expected behavior:** GRUB displays the menu including "PCHH - Windows PE (ADK)". 
+Selecting it searches for the `PCHH_WINPE` FAT32 partition and chainloads 
+`bootx64.efi` from it. Boot takes 3–7 minutes under TCG translation on Apple Silicon.
 
 Note: `dmidecode`, `sensors` and SMART data are limited or absent under
 virtualization — the OS boots and the menu works, but for meaningful hardware
@@ -167,10 +203,29 @@ sync
 
 Then boot the target PC from the USB (choose it in the firmware boot menu).
 
-For UEFI systems, disable **Secure Boot** unless you have enrolled a trusted
-PCHH signing key. The bundled GRUB EFI loader is not Microsoft-signed, so some
-firmware will hide the USB or refuse to launch it while Secure Boot is enabled.
-Use the firmware's UEFI boot entry for the USB, not a legacy/CSM-only entry.
+For UEFI systems, the current image requires **Secure Boot to be disabled**.
+The GRUB EFI loader produced by `grub-mkrescue` is unsigned, so firmware may
+hide the USB or refuse to launch it before Linux starts. Use the firmware's
+UEFI boot entry for the USB, not a legacy/CSM-only entry.
+
+To boot with Secure Boot enabled, the image must be rebuilt as a signed boot
+chain. There are two supported approaches:
+
+1. **Shim path (best for general distribution):** install the distribution's
+   `shim-signed` and `grub-efi-amd64-signed` packages in the ISO build stage,
+   copy the signed `shimx64.efi` and GRUB modules into the EFI System
+   Partition, and sign the PCHH kernel with a key trusted by that GRUB. The
+   shim must be the vendor/Microsoft-signed build; an unsigned copy does not
+   solve Secure Boot.
+2. **Own-key path (best for private use):** generate a Platform Key/Key
+   Exchange Key or a Machine Owner Key, sign GRUB, its modules, and the Linux
+   kernel with `sbsigntool`, and enroll the public certificate in each target
+   machine's firmware (or with `mokutil`). Firmware enrollment is a one-time
+   step per machine and cannot be automated safely by this diagnostic ISO.
+
+Signing only the kernel is insufficient: firmware first verifies the EFI
+   loader, and GRUB then verifies the kernel and any modules it loads. BIOS
+   boot remains unaffected because Secure Boot applies to UEFI.
 
 ## Using it
 
@@ -198,6 +253,16 @@ test does write to (and clean up on) the designated `PCHH_DATA` partition only.
 4. `make iso` again.
 
 ## Limitations & notes
+
+- **Windows boot repair:** menu item 19 inventories Windows volumes and EFI
+  partitions, backs up the Microsoft EFI boot directory, recreates the UEFI
+  firmware entry when `bootmgfw.efi` exists, and exports the BCD store for
+  inspection. It can also generate a ready-to-run WinRE `.cmd` script that
+  runs `bcdboot`, offline `sfc`, `chkdsk`, and Safe Mode `bcdedit` commands.
+  These Microsoft tools run from Windows Recovery Environment, not Linux.
+- **Windows disk safety:** BitLocker volumes must be unlocked in Windows
+  Recovery Environment before offline access. Do not run filesystem repair on
+  a failing drive before imaging it with `ddrescue`.
 
 - **Read-only by design.** SMART, `dmidecode`, etc. only read hardware state.
 - **Memtest86+** boots via the legacy Linux loader, so use BIOS/CSM mode for it.

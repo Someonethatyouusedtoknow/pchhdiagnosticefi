@@ -8,6 +8,19 @@ kv "Kernel" "$(uname -srmo 2>/dev/null || echo unknown)"
 kv "Command line" "$(cat /proc/cmdline 2>/dev/null || echo unavailable)"
 if [ -d /sys/firmware/efi ]; then
     ok "UEFI firmware interface available"
+    # Linux exposes the firmware Secure Boot setting as a one-byte EFI variable.
+    # The variable may be absent when firmware has no Secure Boot support.
+    secure_boot_var=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+    if [ -r "$secure_boot_var" ]; then
+        secure_boot_state=$(od -An -t u1 -j 4 -N 1 "$secure_boot_var" 2>/dev/null | tr -d ' ')
+        case "$secure_boot_state" in
+            1) ok "Secure Boot enabled" ;;
+            0) warn "Secure Boot supported but disabled" ;;
+            *) warn "Secure Boot variable unreadable" ;;
+        esac
+    else
+        info "Secure Boot state unavailable (variable not exposed)"
+    fi
 else
     info "BIOS/CSM boot or EFI variables unavailable"
 fi
