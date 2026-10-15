@@ -5,6 +5,9 @@ dist/
 # Editor / OS cruft
 .DS_Store
 *.swp
+*.md
+**/bin/
+**/obj/
 
 # Local Microsoft ADK/WinPE build inputs (licensed binaries, not committed)
 WinPE_amd64/

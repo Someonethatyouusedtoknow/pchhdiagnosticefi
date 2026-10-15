@@ -47,6 +47,8 @@ cp winpe/sources/boot.wim  "$STAGING/boot.wim"
 # menu here makes it load on every boot with no DISM/offline-servicing step.
 if [ -f winpe/Windows/System32/startnet.cmd ]; then
     cp winpe/Windows/System32/startnet.cmd "$STAGING/startnet.cmd"
+    # GUI launch is disabled until the required optional WinPE component is added.
+    # [ -f winpe/Windows/System32/pchh-gui.hta ] && cp winpe/Windows/System32/pchh-gui.hta "$STAGING/pchh-gui.hta"
     echo "Repair menu (startnet.cmd) will be injected into System32 by wimboot"
 fi
 

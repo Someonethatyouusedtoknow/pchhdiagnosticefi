@@ -14,8 +14,12 @@ kv "duration" "${seconds}s"
 start_errors=$(dmesg 2>/dev/null | grep -ciE 'mce|machine check|hardware error|thermal thrott' || true)
 start_temp=$(sensors 2>/dev/null | grep -iE 'Package id|Tctl|Tdie|Core [0-9]' | head -n 1 || true)
 info "Starting CPU workload..."
+if [ -n "${PCHH_STABILITY_FILE:-}" ]; then
+    stability_log 'CPU STARTING' || { bad 'USB journal update failed; CPU stress skipped.'; exit 1; }
+fi
 stress-ng --cpu 0 --timeout "${seconds}s" --metrics-brief > /tmp/pchh-stress-ng.out 2>&1
 stress_result=$?
+[ -z "${PCHH_STABILITY_FILE:-}" ] || stability_log "CPU FINISHED: stress-ng exit $stress_result" || true
 sanitize_output < /tmp/pchh-stress-ng.out | sed 's/^/  /'
 end_errors=$(dmesg 2>/dev/null | grep -ciE 'mce|machine check|hardware error|thermal thrott' || true)
 end_temp=$(sensors 2>/dev/null | grep -iE 'Package id|Tctl|Tdie|Core [0-9]' | head -n 1 || true)

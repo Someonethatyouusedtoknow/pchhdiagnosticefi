@@ -11,7 +11,7 @@ USB_IMAGE ?= dist/pchh-usb.img
 QEMU_MEM ?= 1024
 QEMU_MACHINE ?= q35
 
-.PHONY: all iso secure-iso prepare-winpe test test-usb test-uefi test-pe-uefi test-usb-winpe clean help
+.PHONY: all iso secure-iso prepare-winpe test test-stability test-usb test-uefi test-pe-uefi test-usb-winpe clean help
 
 all: iso
 
@@ -61,6 +61,10 @@ prepare-winpe:
 ## test: boot the ISO in QEMU (legacy BIOS). Requires: brew install qemu
 test: $(ISO)
 	qemu-system-x86_64 -machine $(QEMU_MACHINE) -m $(QEMU_MEM) -vga std -cdrom $(ISO)
+
+## test-stability: run deterministic checks for report saving and menu scripts
+test-stability:
+	bash tests/test-stability.sh
 
 ## test-usb: boot the writable-partition USB image in QEMU
 test-usb: $(USB_IMAGE)

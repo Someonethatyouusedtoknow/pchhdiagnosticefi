@@ -85,25 +85,33 @@ find_pchh_data_device() {
 }
 
 save_result_to_usb() {
-    local source="$1" device mountpoint mounted_here=0 target
+    local source="$1" device mountpoint mounted_here=0 target fstype
     [ -s "$source" ] || { bad "No result to save"; return 1; }
     device=$(find_pchh_data_device) || { bad "PCHH_DATA not visible"; return 1; }
+    fstype=$(blkid -o value -s TYPE "$device" 2>/dev/null || true)
+    [ "$fstype" = vfat ] || { bad "PCHH_DATA is not a Windows-readable FAT32 volume"; return 1; }
     mountpoint=$(findmnt -n -o TARGET "$device" 2>/dev/null || true)
     if [ -z "$mountpoint" ]; then
         mountpoint=/mnt/pchh-usb
         mkdir -p "$mountpoint"
-        mount -o rw "$device" "$mountpoint" 2>/dev/null || { bad "USB mount failed"; return 1; }
+        mount -t vfat -o rw "$device" "$mountpoint" 2>/dev/null || { bad "USB mount failed"; return 1; }
         mounted_here=1
     fi
-    target="$mountpoint/pchh-result-$(date +%Y%m%d-%H%M%S).txt"
+    target="$mountpoint/PCHH-result-$(date +%Y%m%d-%H%M%S).txt"
     if cp "$source" "$target" && sync && [ -s "$target" ]; then
-        ok "Saved to USB"
+        ok "Saved for Windows: $target"
         [ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true
         return 0
     fi
     [ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true
     bad "USB write failed"
     return 1
+}
+
+stability_log() {
+    [ -n "${PCHH_STABILITY_FILE:-}" ] || return 1
+    printf '%s | %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$PCHH_STABILITY_FILE" || return 1
+    sync "$PCHH_STABILITY_FILE" 2>/dev/null || sync
 }
 
 list_dimms() {

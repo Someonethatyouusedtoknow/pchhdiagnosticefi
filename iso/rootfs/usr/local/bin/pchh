@@ -65,8 +65,8 @@ while true; do
            else
                run_result pchh-report
            fi
-           finish_result ;;
-        2) run_result_with_args pchh-report --identify "$([ "$PCHH_AUTO_USB_REPORT" -eq 1 ] && echo --usb)"; finish_result ;;
+           [ "$PCHH_AUTO_USB_REPORT" -eq 1 ] && printf '\n  Diagnose-all is complete. The report is ready to open as a .txt file in Windows.\n' || finish_result ;;
+        2) run_result_with_args pchh-report --identify "$([ "$PCHH_AUTO_USB_REPORT" -eq 1 ] && echo --usb)"; [ "$PCHH_AUTO_USB_REPORT" -eq 1 ] && printf '\n  System report is complete and ready to open in Windows.\n' || finish_result ;;
         3) run_result pchh-components;    finish_result ;;
         4) run_result pchh-memory;        finish_result ;;
         5) run_result pchh-cpu-test;      finish_result ;;

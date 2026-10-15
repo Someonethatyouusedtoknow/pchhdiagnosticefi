@@ -29,6 +29,7 @@ call :DETECT_WINDOWS
 
 REM First-run guidance: if no Windows is visible, send the user to Storage Setup
 REM instead of the full menu, so they can rescan / online / assign / load drivers.
+REM The graphical launcher is intentionally disabled in this image.
 if not defined WINPART goto MENU_STORAGE
 goto MAINMENU
 
@@ -345,7 +346,7 @@ echo   Using Windows at: !WINPART!\Windows
 echo.
 echo   Looking for an EFI System Partition...
 set "ESP="
-(echo list volume) | diskpart | findstr /i "FAT32 System"
+(echo list volume) | diskpart | find /i "FAT32 System"
 echo.
 set /p "ESP=  Enter the drive letter of the EFI/System partition, or blank for Legacy BIOS: "
 echo.
@@ -579,7 +580,7 @@ goto MENU_REG
 :REG_UNLOAD
 cls
 echo   Loaded offline hives:
-reg query HKLM 2>nul | findstr /i "OFF_"
+reg query HKLM 2>nul | find /i "OFF_"
 echo.
 set /p "hn=  Hive key to unload (e.g. OFF_SYSTEM): "
 if "!hn!"=="" goto MENU_REG
@@ -848,6 +849,8 @@ echo    [3]  Network summary  ^(ipconfig^)
 echo    [4]  Windows Event Log query  ^(wevtutil^)
 echo    [5]  Installed driver list  ^(driverquery^)
 echo    [6]  Open Task Manager
+echo    [7]  Diagnose persistent recovery error ^(0xc000... / BCD / winload^)
+echo    [8]  Read Startup Repair log and propose a repair
 echo.
 echo    [0]  Back to main menu
 echo  --------------------------------------------------------------------------
@@ -859,7 +862,109 @@ if "!h!"=="3" ( cls & ipconfig /all & echo. & pause & goto MENU_DIAG )
 if "!h!"=="4" goto DIAG_EVT
 if "!h!"=="5" ( cls & driverquery & echo. & pause & goto MENU_DIAG )
 if "!h!"=="6" ( start "" taskmgr.exe & goto MENU_DIAG )
+if "!h!"=="7" goto DIAG_RECOVERY
+if "!h!"=="8" goto DIAG_SRT
 if "!h!"=="0" goto MAINMENU
+goto MENU_DIAG
+
+:DIAG_SRT
+cls
+echo  =================  STARTUP REPAIR LOG DIAGNOSIS  =========================
+echo.
+call :NEEDWIN
+if not defined WINPART goto MENU_DIAG
+set "SRTLOG=!WINPART!\Windows\System32\LogFiles\Srt\SrtTrail.txt"
+if not exist "!SRTLOG!" (
+    echo   SrtTrail.txt was not found at !SRTLOG!.
+    echo   Run Startup Repair first, or use Diagnostics - Persistent Recovery.
+    echo.
+    pause
+    goto MENU_DIAG
+)
+echo   Reading: !SRTLOG!
+echo.
+type "!SRTLOG!"
+echo.
+echo  --- Proposed next steps ---
+find /i "boot critical file is corrupt" "!SRTLOG!" >nul 2>&1 && echo   [1] Boot file corruption: back up BCD, then use Boot Repair - Auto repair.
+find /i "boot manager failed to find OS loader" "!SRTLOG!" >nul 2>&1 && echo   [2] OS loader missing: verify the Windows volume and run bcdboot to the EFI partition.
+find /i "boot configuration data store" "!SRTLOG!" >nul 2>&1 && echo   [3] BCD problem: use Persistent Recovery diagnosis to inspect and back up the BCD.
+find /i "root cause found" "!SRTLOG!" >nul 2>&1 && echo   [4] Startup Repair identified a root cause above; address that item before rebuilding blindly.
+find /i "corrupt" "!SRTLOG!" >nul 2>&1 && echo   [5] Corruption reported: run read-only checks first, then ChkDsk only after backing up important data.
+find /i "unknown bugcheck" "!SRTLOG!" >nul 2>&1 && echo   [6] Driver or update failure suspected: use System File Repair or remove the recent offline package.
+echo.
+echo   These are proposals based on log text; no repair was performed.
+pause
+goto MENU_DIAG
+
+:DIAG_RECOVERY
+cls
+echo  ==============  PERSISTENT WINDOWS RECOVERY DIAGNOSIS  ===================
+echo.
+echo  This diagnoses "Your PC/Device needs to be repaired" errors, not BSODs.
+echo  Enter the code shown on the recovery screen (for example 0xc000000e).
+set "rcode="
+set /p "rcode=  Recovery code (blank to continue without it): "
+set "rfile="
+set /p "rfile=  File named on screen (optional, e.g. \Boot\BCD): "
+echo.
+call :NEEDWIN
+if not defined WINPART goto MENU_DIAG
+echo   Windows volume: !WINPART!
+echo.
+echo  --- Code guidance ---
+if /i "!rcode!"=="0xc000000e" echo   0xc000000e: boot device or required boot file not found. Check EFI/BCD and storage visibility.
+if /i "!rcode!"=="0xc0000225" echo   0xc0000225: BCD or boot entry cannot locate Windows. Inspect BCD, then consider bcdboot.
+if /i "!rcode!"=="0xc0000098" echo   0xc0000098: BCD is missing or corrupt. Back up the BCD before rebuilding it.
+if /i "!rcode!"=="0xc000000f" echo   0xc000000f: boot configuration data could not be read. Inspect the EFI partition and BCD.
+if /i "!rfile!"=="\Boot\BCD" echo   Screen names the BCD store; the BCD inspection below is the primary check.
+if /i "!rfile!"=="\Windows\System32\winload.efi" if exist !WINPART!\Windows\System32\winload.efi (echo   Named loader exists on the detected Windows volume.) else echo   [FAIL] Named loader is missing from the detected Windows volume.
+echo.
+echo  --- Windows boot files ---
+if exist !WINPART!\Windows\System32\winload.efi (echo   [ OK ] winload.efi found) else echo   [FAIL] winload.efi missing
+if exist !WINPART!\Windows\Boot\EFI\bootmgfw.efi (echo   [ OK ] Windows boot manager found) else echo   [WARN] Windows boot manager not found in Windows volume
+echo.
+echo  --- Recovery logs ---
+set "SRTLOG="
+for %%d in (C D E F G H I J K L M N O P Q R S T U V W Y Z) do (
+    if exist %%d:\Windows\System32\LogFiles\Srt\SrtTrail.txt (
+        echo   SRT log: %%d:\Windows\System32\LogFiles\Srt\SrtTrail.txt
+        if /i "%%d:"=="!WINPART!" set "SRTLOG=%%d:\Windows\System32\LogFiles\Srt\SrtTrail.txt"
+    )
+    if exist %%d:\Recovery\WindowsRE\Winre.wim echo   WinRE image: %%d:\Recovery\WindowsRE\Winre.wim
+)
+if defined SRTLOG (
+    echo.
+    echo  --- Startup Repair findings ---
+    type "!SRTLOG!"
+)
+echo.
+echo  --- BCD store ---
+call :LOCATE_BCD
+if defined BCDSTORE (
+    echo   Store: !BCDSTORE!
+    bcdedit /store "!BCDSTORE!" /enum all
+    echo.
+    set "backup=!BCDSTORE!.pchh-backup"
+    copy /y "!BCDSTORE!" "!backup!" >nul
+    if exist "!backup!" (echo   [ OK ] BCD backup: !backup!) else echo   [FAIL] Could not create BCD backup
+) else echo   [WARN] BCD store not found; assign the EFI partition a letter and retry.
+echo.
+echo  [1] Rebuild UEFI boot files with bcdboot (requires EFI letter)
+echo  [2] Return without changing anything
+set "ra="
+set /p "ra=  Select: "
+if not "!ra!"=="1" goto MENU_DIAG
+set "res="
+set /p "res=  EFI System Partition letter (for example S): "
+if "!res!"=="" goto MENU_DIAG
+echo   This writes new boot files to !res!: and changes boot configuration.
+set "confirm="
+set /p "confirm=  Type REPAIR to continue: "
+if /i not "!confirm!"=="REPAIR" goto MENU_DIAG
+bcdboot !WINPART!\Windows /s !res!: /f UEFI
+echo.
+pause
 goto MENU_DIAG
 
 :DIAG_SYS
@@ -867,7 +972,7 @@ cls
 echo  ======================  SYSTEM SUMMARY  =================================
 echo.
 echo  --- Processor ---
-reg query "HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0" /v ProcessorNameString 2>nul | findstr /i "ProcessorNameString"
+reg query "HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0" /v ProcessorNameString 2>nul | find /i "ProcessorNameString"
 echo.
 echo  --- System BIOS / Board ---
 reg query "HKLM\HARDWARE\DESCRIPTION\System\BIOS" 2>nul
@@ -1118,7 +1223,7 @@ echo.
 call :LOCATE_BCD
 if not defined BCDSTORE goto MENU_BOOTMODE
 set "RSEQ="
-for /f "tokens=1,*" %%a in ('bcdedit /store "!BCDSTORE!" /enum {default} 2^>nul ^| findstr /i "recoverysequence"') do set "RSEQ=%%b"
+for /f "tokens=1,*" %%a in ('bcdedit /store "!BCDSTORE!" /enum {default} 2^>nul ^| find /i "recoverysequence"') do set "RSEQ=%%b"
 REM Trim spaces
 for /f "tokens=* delims= " %%a in ("!RSEQ!") do set "RSEQ=%%a"
 if not defined RSEQ (
@@ -1181,10 +1286,10 @@ cls
 echo  =============  STORAGE SETUP  /  DISK DETECTION   (START HERE)  =========
 echo.
 echo   DISKS:
-(echo list disk) | diskpart | findstr /i /c:"Disk "
+(echo list disk) | diskpart
 echo.
 echo   VOLUMES:
-(echo list volume) | diskpart | findstr /i /c:"Volume "
+(echo list volume) | diskpart
 echo.
 call :DETECT_WINDOWS
 if defined WINPART (
@@ -1251,7 +1356,7 @@ echo   disks appear. Put the extracted driver (its .inf + .sys) on another USB
 echo   stick or the PCHH_DATA partition, then give the full path to the .inf.
 echo.
 echo   Current volumes (to find your driver's drive letter):
-(echo list volume) | diskpart | findstr /i /c:"Volume "
+(echo list volume) | diskpart
 echo.
 set /p "inf=  Full path to the .inf (blank to cancel): "
 if "!inf!"=="" goto MENU_STORAGE

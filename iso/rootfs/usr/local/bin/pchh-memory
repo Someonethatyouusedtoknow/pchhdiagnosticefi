@@ -30,6 +30,9 @@ if have dmidecode; then
 fi
 
 section "Live RAM stress test"
+if [ -n "${PCHH_STABILITY_FILE:-}" ]; then
+    stability_log 'RAM STARTING' || { bad 'USB journal update failed; RAM stress skipped.'; exit 1; }
+fi
 if [ "${PCHH_RAM_MODE:-live}" = memtest ]; then
     warn "Memtest86+ selected; reboot to run it."
 elif have memtester; then
@@ -39,9 +42,11 @@ elif have memtester; then
         kv "test size" "${mem_mb}M"
         info "Running a short memtester pass..."
         if timeout 120s memtester "${mem_mb}M" 1 > /tmp/pchh-memtester.out 2>&1; then
+            [ -z "${PCHH_STABILITY_FILE:-}" ] || stability_log 'RAM PASS: memtester completed' || true
             sanitize_output < /tmp/pchh-memtester.out | sed 's/^/  /'
             ok "memtester completed without reporting RAM errors."
         else
+            [ -z "${PCHH_STABILITY_FILE:-}" ] || stability_log 'RAM FAIL: memtester aborted or reported errors' || true
             sanitize_output < /tmp/pchh-memtester.out | sed 's/^/  /'
             bad "memtester reported RAM errors or aborted."
         fi
@@ -53,6 +58,7 @@ elif have stress-ng; then
     info "Running a short memory-pressure pass..."
     stress-ng --vm 1 --vm-bytes 75% --timeout 30s --metrics-brief > /tmp/pchh-memory-stress.out 2>&1
     stress_result=$?
+    [ -z "${PCHH_STABILITY_FILE:-}" ] || stability_log "RAM FINISHED: stress-ng exit $stress_result" || true
     sanitize_output < /tmp/pchh-memory-stress.out | sed 's/^/  /'
     if [ "$stress_result" -eq 0 ]; then
         ok "Memory pressure test completed without kernel faults."

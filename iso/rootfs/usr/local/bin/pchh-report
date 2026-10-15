@@ -62,14 +62,14 @@ export_report_to_usb() {
     if [ -z "$mountpoint" ]; then
         mountpoint=/mnt/pchh-usb
         mkdir -p "$mountpoint"
-        if ! mount "$device" "$mountpoint" 2>/dev/null; then
+        if ! mount -t vfat -o rw "$device" "$mountpoint" 2>/dev/null; then
             warn "Could not mount $device. Report remains at $REPORT"
             return 1
         fi
         mounted_here=1
     fi
 
-    target="$mountpoint/$(basename "$REPORT")"
+    target="$mountpoint/PCHH-Diagnose-$(date +%Y%m%d-%H%M%S).txt"
     if cp -f "$REPORT" "$target" 2>/dev/null && [ -s "$target" ]; then
         sync
         ok "Report saved to USB: $target"
@@ -80,6 +80,24 @@ export_report_to_usb() {
     [ "$mounted_here" -eq 1 ] && umount "$mountpoint" 2>/dev/null || true
     warn "Could not write to $device. Report remains at $REPORT"
     return 1
+}
+
+start_stability_log() {
+    local device mountpoint fstype
+    device=$(find_pchh_data_device) || return 1
+    fstype=$(blkid -o value -s TYPE "$device" 2>/dev/null || true)
+    [ "$fstype" = vfat ] || return 1
+    mountpoint=$(findmnt -n -o TARGET "$device" 2>/dev/null || true)
+    if [ -z "$mountpoint" ]; then
+        mountpoint=/mnt/pchh-usb
+        mkdir -p "$mountpoint"
+        mount -t vfat -o rw,sync "$device" "$mountpoint" 2>/dev/null || return 1
+    fi
+    PCHH_STABILITY_FILE="$mountpoint/PCHH-Stability-$(date +%Y%m%d-%H%M%S).txt"
+    export PCHH_STABILITY_FILE
+    printf 'PCHH stability run started: %s\nUSB journal created before CPU and RAM stress.\nAn unfinished stage may indicate a crash or power loss.\n' "$(date)" > "$PCHH_STABILITY_FILE" || return 1
+    sync "$PCHH_STABILITY_FILE" 2>/dev/null || sync
+    [ -s "$PCHH_STABILITY_FILE" ]
 }
 
 report_step_name() {
@@ -120,11 +138,25 @@ echo "  Running full diagnostic"
 echo "  Detailed results are being saved to $REPORT"
 echo
 
+if start_stability_log; then
+    ok "Crash journal created on USB: $PCHH_STABILITY_FILE"
+else
+    unset PCHH_STABILITY_FILE
+    warn "USB journal unavailable; CPU and RAM stress will be skipped."
+fi
+
 for s in pchh-config pchh-bios pchh-manufacturers pchh-components \
          pchh-memory pchh-ecc pchh-storage pchh-battery \
          pchh-pcie pchh-temps pchh-bios-audit pchh-cpu-test \
          pchh-gpu pchh-usb-test pchh-storage-test pchh-network pchh-peripherals; do
     [ "$s" = pchh-config ] && [ "$identify" -ne 1 ] && continue
+    if [ "$s" = pchh-memory ] || [ "$s" = pchh-cpu-test ]; then
+        if [ -z "${PCHH_STABILITY_FILE:-}" ]; then
+            printf '\n== %s ==\nSkipped: USB crash journal unavailable.\n' "$(report_step_name "$s")" >> "$REPORT"
+            warn "Skipping $(report_step_name "$s"): USB crash journal unavailable"
+            continue
+        fi
+    fi
     have "$s" || continue
     name=$(report_step_name "$s")
     raw="/tmp/pchh-${s}-$$.out"
@@ -159,6 +191,8 @@ for s in pchh-config pchh-bios pchh-manufacturers pchh-components \
     fi
     rm -f "$raw"
 done
+
+[ -z "${PCHH_STABILITY_FILE:-}" ] || stability_log 'DIAGNOSE ALL COMPLETE' || true
 
 cat >> "$REPORT" <<'EOF'
 
