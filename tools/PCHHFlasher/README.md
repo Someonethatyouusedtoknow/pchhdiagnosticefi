@@ -100,6 +100,13 @@ The interface features:
 - Check your internet connection
 - Verify the `$ImageUrl` is correct
 - Check if GitHub is accessible from your network
+- Ensure the latest release includes an asset named `pchh-usb.img`
+
+If you see "The property DownloadProgressChanged cannot be found" or an
+`OpenRead` error for a missing `pchh-usb.img`, replace your local
+`PCHHFlasher.ps1` with the updated version in this folder. The updated script
+handles download events correctly, stops on download errors, and opens the
+image before erasing the USB drive. Failed or empty downloads are discarded.
 
 ## Technical Details
 

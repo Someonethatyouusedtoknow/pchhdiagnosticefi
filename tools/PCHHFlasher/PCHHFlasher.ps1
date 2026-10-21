@@ -163,14 +163,19 @@ function Download-Image {
     param([string]$Url, [string]$Destination)
 
     $progressBar.Visible = $true
+    $progressBar.Style = "Continuous"
+    $progressBar.Value = 0
     $progressLabel.Visible = $true
     $progressLabel.Text = "Downloading PCHH recovery image..."
     $statusLabel.Text = "Downloading from GitHub..."
     $form.Refresh()
 
+    $webClient = $null
+    $partialPath = $Destination + ".part"
+    $downloadState = @{ Completed = $false; Error = $null; Cancelled = $false }
     try {
         $webClient = New-Object System.Net.WebClient
-        $webClient.DownloadProgressChanged = {
+        $webClient.add_DownloadProgressChanged({
             param($sender, $e)
             $progressBar.Value = $e.ProgressPercentage
             $mbReceived = [math]::Round($e.BytesReceived / 1MB, 2)
@@ -178,22 +183,46 @@ function Download-Image {
             $pct = $e.ProgressPercentage
             $progressLabel.Text = "Downloaded $mbReceived MB / $mbTotal MB ($pct percent)"
             $form.Refresh()
-        }
+        })
+        $webClient.add_DownloadFileCompleted({
+            param($sender, $e)
+            $downloadState.Error = $e.Error
+            $downloadState.Cancelled = $e.Cancelled
+            $downloadState.Completed = $true
+        })
 
-        $webClient.DownloadFileAsync($Url, $Destination)
-        while ($webClient.IsBusy) {
+        $webClient.DownloadFileAsync([uri]$Url, $partialPath)
+        while (-not $downloadState.Completed) {
             [System.Windows.Forms.Application]::DoEvents()
             Start-Sleep -Milliseconds 100
         }
+        if ($downloadState.Error) {
+            throw $downloadState.Error
+        }
+        if ($downloadState.Cancelled) {
+            throw "The image download was cancelled."
+        }
+        if (-not (Test-Path -LiteralPath $partialPath -PathType Leaf)) {
+            throw "The download did not create an image file."
+        }
+        if ((Get-Item -LiteralPath $partialPath -ErrorAction Stop).Length -le 0) {
+            throw "The downloaded image is empty."
+        }
+        Move-Item -LiteralPath $partialPath -Destination $Destination -Force -ErrorAction Stop
         return $true
     } catch {
-        [System.Windows.Forms.MessageBox]::Show(
+        [void][System.Windows.Forms.MessageBox]::Show(
             "Failed to download image: " + $_.Exception.Message,
             "Download Error",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Error
         )
         return $false
+    } finally {
+        if ($null -ne $webClient) {
+            $webClient.Dispose()
+        }
+        Remove-Item -LiteralPath $partialPath -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -206,16 +235,22 @@ function Flash-USB {
     $progressBar.Style = "Marquee"
     $form.Refresh()
 
+    $sourceFile = $null
+    $targetFile = $null
     try {
+        # Open and validate the image before making any changes to the USB drive.
+        $sourceFile = [System.IO.File]::OpenRead($ImagePath)
+        $totalBytes = $sourceFile.Length
+        if ($totalBytes -le 0) {
+            throw "The image file is empty."
+        }
         Clear-Disk -Number $DiskNumber -RemoveData -Confirm:$false -ErrorAction Stop
         $progressLabel.Text = "Writing image data..."
         $form.Refresh()
 
         $diskPath = "\\.\PhysicalDrive" + $DiskNumber
-        $sourceFile = [System.IO.File]::OpenRead($ImagePath)
         $targetFile = [System.IO.File]::OpenWrite($diskPath)
         $buffer = New-Object byte[] (4MB)
-        $totalBytes = $sourceFile.Length
         $bytesWritten = 0
         $progressBar.Style = "Continuous"
         $progressBar.Value = 0
@@ -231,17 +266,19 @@ function Flash-USB {
             $form.Refresh()
         }
 
-        $sourceFile.Close()
-        $targetFile.Close()
+        $targetFile.Flush()
         return $true
     } catch {
-        [System.Windows.Forms.MessageBox]::Show(
+        [void][System.Windows.Forms.MessageBox]::Show(
             "Failed to write image: " + $_.Exception.Message,
             "Write Error",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Error
         )
         return $false
+    } finally {
+        if ($null -ne $targetFile) { $targetFile.Dispose() }
+        if ($null -ne $sourceFile) { $sourceFile.Dispose() }
     }
 }
 
@@ -270,16 +307,19 @@ $flashButton.Add_Click({
 
     $flashButton.Enabled = $false
     $usbCombo.Enabled = $false
+    $refreshButton.Enabled = $false
+    $closeButton.Enabled = $false
+    $form.ControlBox = $false
 
     $selection = $usbCombo.SelectedItem.ToString()
     $diskNumber = [int]($selection -replace '^Disk (\d+):.*', '$1')
 
     $downloaded = Download-Image -Url $ImageUrl -Destination $TempPath
 
-    if ($downloaded) {
+    if ($downloaded -eq $true) {
         $flashed = Flash-USB -DiskNumber $diskNumber -ImagePath $TempPath
 
-        if ($flashed) {
+        if ($flashed -eq $true) {
             $progressBar.Visible = $false
             $progressLabel.Visible = $false
             $successLabel.Visible = $true
@@ -293,6 +333,9 @@ $flashButton.Add_Click({
 
     $flashButton.Enabled = $true
     $usbCombo.Enabled = $true
+    $refreshButton.Enabled = $true
+    $closeButton.Enabled = $true
+    $form.ControlBox = $true
 })
 
 # Refresh button
