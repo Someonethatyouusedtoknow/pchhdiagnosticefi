@@ -4,7 +4,7 @@ Elegant Windows tool to download and flash PCHH recovery image to USB drives.
 
 ## Features
 
-- **Automatic Download**: Fetches the latest PCHH recovery image from GitHub
+- **Automatic Download**: Fetches the PCHH recovery image from the GitHub Beta release
 - **USB Detection**: Automatically detects all removable USB drives
 - **Progress Animation**: Real-time download and write progress
 - **Modern UI**: Clean dark theme with smooth animations
@@ -57,7 +57,7 @@ The download requires a published GitHub release with an asset named
 
 ## What It Does
 
-1. **Downloads** the latest `pchh-usb.img` from GitHub releases
+1. **Downloads** `pchh-usb.img` from the GitHub `Beta` release
 2. **Detects** all USB drives connected to your system
 3. **Erases** the selected USB drive
 4. **Writes** the PCHH recovery image byte-by-byte
@@ -69,7 +69,7 @@ The download requires a published GitHub release with an asset named
 Edit the `$ImageUrl` variable in `PCHHFlasher.ps1` to point to your release:
 
 ```powershell
-$ImageUrl = "https://github.com/Someonethatyouusedtoknow/pchhdiagnosticefi/releases/latest/download/pchh-usb.img"
+$ImageUrl = "https://github.com/Someonethatyouusedtoknow/pchhdiagnosticefi/releases/download/Beta/pchh-usb.img"
 ```
 
 ## Screenshots
@@ -100,7 +100,9 @@ The interface features:
 - Check your internet connection
 - Verify the `$ImageUrl` is correct
 - Check if GitHub is accessible from your network
-- Ensure the latest release includes an asset named `pchh-usb.img`
+- Ensure the `Beta` release includes an asset named `pchh-usb.img`
+- For "The connection was closed unexpectedly", use the updated script, which
+  enables TLS 1.2 for Windows PowerShell connections to GitHub.
 
 If you see "The property DownloadProgressChanged cannot be found" or an
 `OpenRead` error for a missing `pchh-usb.img`, replace your local

@@ -5,7 +5,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # Configuration
-$ImageUrl = "https://github.com/Someonethatyouusedtoknow/pchhdiagnosticefi/releases/latest/download/pchh-usb.img"
+$ImageUrl = "https://github.com/Someonethatyouusedtoknow/pchhdiagnosticefi/releases/download/Beta/pchh-usb.img"
 $TempPath = "$env:TEMP\pchh-usb.img"
 
 # Create main form
@@ -174,6 +174,8 @@ function Download-Image {
     $partialPath = $Destination + ".part"
     $downloadState = @{ Completed = $false; Error = $null; Cancelled = $false }
     try {
+        # Windows PowerShell may default to TLS versions GitHub no longer accepts.
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
         $webClient = New-Object System.Net.WebClient
         $webClient.add_DownloadProgressChanged({
             param($sender, $e)
@@ -211,8 +213,9 @@ function Download-Image {
         Move-Item -LiteralPath $partialPath -Destination $Destination -Force -ErrorAction Stop
         return $true
     } catch {
+        $downloadError = $_.Exception.GetBaseException().Message
         [void][System.Windows.Forms.MessageBox]::Show(
-            "Failed to download image: " + $_.Exception.Message,
+            "Failed to download image: " + $downloadError + "`r`n`r`nURL: " + $Url,
             "Download Error",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Error
