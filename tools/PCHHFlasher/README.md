@@ -110,6 +110,15 @@ If you see "The property DownloadProgressChanged cannot be found" or an
 handles download events correctly, stops on download errors, and opens the
 image before erasing the USB drive. Failed or empty downloads are discarded.
 
+### "OpenWrite" / "The parameter is incorrect"
+
+Use the updated `PCHHFlasher.ps1`. It opens the physical USB disk with
+`FileMode.Open` instead of the file-creation mode used by `OpenWrite`.
+It also checks disk capacity and image alignment to the USB's logical sectors
+before erasing the drive. Run as Administrator, close programs accessing the
+USB, and retry. An earlier failed write may already have erased the USB's
+partition table; select the same USB disk and flash it again.
+
 ## Technical Details
 
 - Uses **System.Net.WebClient** for HTTP downloads

@@ -247,12 +247,35 @@ function Flash-USB {
         if ($totalBytes -le 0) {
             throw "The image file is empty."
         }
+        $disk = Get-Disk -Number $DiskNumber -ErrorAction Stop
+        if ($disk.BusType -ne 'USB' -or $disk.IsBoot -or $disk.IsSystem) {
+            throw "The selected disk must be a USB drive and cannot be a boot or system disk."
+        }
+        if ($totalBytes -gt $disk.Size) {
+            throw "The image is larger than the selected USB drive."
+        }
+        $sectorSize = [int]$disk.LogicalSectorSize
+        if ($sectorSize -le 0 -or (4MB % $sectorSize) -ne 0) {
+            throw "The USB drive reports an unsupported sector size."
+        }
+        if (($totalBytes % $sectorSize) -ne 0) {
+            throw "The image size is not aligned to this USB drive's $sectorSize-byte sectors. Use a USB drive with 512-byte logical sectors."
+        }
         Clear-Disk -Number $DiskNumber -RemoveData -Confirm:$false -ErrorAction Stop
         $progressLabel.Text = "Writing image data..."
         $form.Refresh()
 
         $diskPath = "\\.\PhysicalDrive" + $DiskNumber
-        $targetFile = [System.IO.File]::OpenWrite($diskPath)
+        # Physical disks must be opened as existing devices. OpenWrite uses
+        # OpenOrCreate, which Windows can reject with ERROR_INVALID_PARAMETER.
+        $targetFile = New-Object System.IO.FileStream(
+            $diskPath,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::ReadWrite,
+            4MB,
+            [System.IO.FileOptions]::WriteThrough
+        )
         $buffer = New-Object byte[] (4MB)
         $bytesWritten = 0
         $progressBar.Style = "Continuous"
@@ -273,7 +296,7 @@ function Flash-USB {
         return $true
     } catch {
         [void][System.Windows.Forms.MessageBox]::Show(
-            "Failed to write image: " + $_.Exception.Message,
+            "Failed to write image: " + $_.Exception.GetBaseException().Message,
             "Write Error",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Error
