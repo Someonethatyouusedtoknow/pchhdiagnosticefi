@@ -7,9 +7,9 @@ Elegant Windows tool to download and flash PCHH recovery image to USB drives.
 - **Automatic Download**: Fetches the PCHH recovery image from the GitHub Beta release
 - **USB Detection**: Automatically detects all removable USB drives
 - **Progress Animation**: Real-time download and write progress
-- **Modern UI**: Clean dark theme with smooth animations
+- **Modern UI**: Dark cards, consistent spacing, and highlighted workflow stages
 - **Safe Operation**: Confirms before erasing any data
-- **Auto-Close**: Exits automatically after successful flash
+- **Completion Screen**: Keeps the result visible until you select Done
 
 ## Requirements
 
@@ -53,7 +53,7 @@ The download requires a published GitHub release with an asset named
 3. Click **"Create Bootable USB"**
 4. Confirm the warning (all data will be erased)
 5. Wait for download and write to complete
-6. Success! The drive is ready to use
+6. The completion screen confirms the drive is ready; select **Done** to close
 
 ## What It Does
 
@@ -75,10 +75,11 @@ $ImageUrl = "https://github.com/Someonethatyouusedtoknow/pchhdiagnosticefi/relea
 ## Screenshots
 
 The interface features:
-- **Dark theme** matching PCHH branding
+- **Dark theme** with cyan accents and separate target and progress cards
 - **Live progress bars** for download and write operations
 - **Clear warnings** before destructive operations
-- **Success animation** with auto-close
+- **Workflow stages** for selecting, downloading, and writing
+- **Persistent success screen** with a Done button
 
 ## Troubleshooting
 

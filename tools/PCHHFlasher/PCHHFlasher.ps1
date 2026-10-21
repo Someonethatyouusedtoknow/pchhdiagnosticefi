@@ -8,128 +8,159 @@ Add-Type -AssemblyName System.Drawing
 $ImageUrl = "https://github.com/Someonethatyouusedtoknow/pchhdiagnosticefi/releases/download/Beta/pchh-usb.img"
 $TempPath = "$env:TEMP\pchh-usb.img"
 
-# Create main form
+# Shared palette and controls. Keep the script self-contained for terminal launches.
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$colors = @{
+    Background = [System.Drawing.ColorTranslator]::FromHtml("#10151F")
+    Surface = [System.Drawing.ColorTranslator]::FromHtml("#1A2230")
+    Border = [System.Drawing.ColorTranslator]::FromHtml("#334155")
+    Text = [System.Drawing.ColorTranslator]::FromHtml("#F1F5F9")
+    Muted = [System.Drawing.ColorTranslator]::FromHtml("#A8B6CA")
+    Accent = [System.Drawing.ColorTranslator]::FromHtml("#67E8F9")
+    Warning = [System.Drawing.ColorTranslator]::FromHtml("#FCD38A")
+    Success = [System.Drawing.ColorTranslator]::FromHtml("#86EFAC")
+}
+
+function Add-Text {
+    param($Parent, [string]$Text, [int]$X, [int]$Y, [int]$Width,
+        [int]$Height = 24, [float]$Size = 10, $Color = $colors.Text,
+        [switch]$Bold)
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = $Text
+    $label.Location = New-Object System.Drawing.Point($X, $Y)
+    $label.Size = New-Object System.Drawing.Size($Width, $Height)
+    $style = [System.Drawing.FontStyle]::Regular
+    if ($Bold) { $style = [System.Drawing.FontStyle]::Bold }
+    $label.Font = New-Object System.Drawing.Font("Segoe UI", $Size, $style)
+    $label.ForeColor = $Color
+    $Parent.Controls.Add($label)
+    return $label
+}
+
+function Add-Button {
+    param($Parent, [string]$Text, [int]$X, [int]$Y, [int]$Width, [switch]$Primary)
+    $button = New-Object System.Windows.Forms.Button
+    $button.Text = $Text
+    $button.Location = New-Object System.Drawing.Point($X, $Y)
+    $button.Size = New-Object System.Drawing.Size($Width, 44)
+    $button.FlatStyle = "Flat"
+    $button.FlatAppearance.BorderSize = 1
+    $button.FlatAppearance.BorderColor = $colors.Border
+    $button.BackColor = $colors.Surface
+    $button.ForeColor = $colors.Text
+    $button.FlatAppearance.MouseOverBackColor = [System.Drawing.ColorTranslator]::FromHtml("#29384C")
+    $button.FlatAppearance.MouseDownBackColor = $colors.Border
+    $button.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    $button.Cursor = "Hand"
+    $button.UseVisualStyleBackColor = $false
+    if ($Primary) {
+        $button.BackColor = $colors.Accent
+        $button.ForeColor = $colors.Background
+        $button.FlatAppearance.BorderSize = 0
+        $button.FlatAppearance.MouseOverBackColor = [System.Drawing.ColorTranslator]::FromHtml("#A5F3FC")
+        $button.FlatAppearance.MouseDownBackColor = [System.Drawing.ColorTranslator]::FromHtml("#22D3EE")
+        $button.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    }
+    $Parent.Controls.Add($button)
+    return $button
+}
+
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "PCHH USB Flasher"
-$form.Size = New-Object System.Drawing.Size(600, 450)
+$form.AutoScaleDimensions = New-Object System.Drawing.SizeF(96, 96)
+$form.AutoScaleMode = "Dpi"
+$form.ClientSize = New-Object System.Drawing.Size(720, 678)
 $form.StartPosition = "CenterScreen"
-$form.FormBorderStyle = "FixedDialog"
+$form.FormBorderStyle = "FixedSingle"
 $form.MaximizeBox = $false
-$form.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
+$form.BackColor = $colors.Background
+$form.ForeColor = $colors.Text
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 
-# Header panel
-$headerPanel = New-Object System.Windows.Forms.Panel
-$headerPanel.Size = New-Object System.Drawing.Size(600, 80)
-$headerPanel.Location = New-Object System.Drawing.Point(0, 0)
-$headerPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
-$form.Controls.Add($headerPanel)
+# Brand and introduction
+$brandLabel = Add-Text $form "PCHH  /  RECOVERY TOOLS" 32 26 460 24 9 $colors.Accent -Bold
+$titleLabel = Add-Text $form "Create your recovery USB" 32 58 656 46 25 $colors.Text -Bold
+$subtitleLabel = Add-Text $form "A bootable PCHH toolkit, ready when you need it." 34 110 650 26 11 $colors.Muted
 
-# Title label
-$titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Text = "PCHH Recovery USB Creator"
-$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 18, [System.Drawing.FontStyle]::Bold)
-$titleLabel.ForeColor = [System.Drawing.Color]::FromArgb(248, 250, 252)
-$titleLabel.Location = New-Object System.Drawing.Point(30, 20)
-$titleLabel.Size = New-Object System.Drawing.Size(540, 40)
-$headerPanel.Controls.Add($titleLabel)
+# Workflow overview: the current stage is highlighted throughout the operation.
+$stepLabels = @(
+    (Add-Text $form "01   SELECT USB" 34 160 208 26 9 $colors.Accent -Bold)
+    (Add-Text $form "02   DOWNLOAD" 258 160 208 26 9 $colors.Muted -Bold)
+    (Add-Text $form "03   WRITE IMAGE" 482 160 208 26 9 $colors.Muted -Bold)
+)
 
-# Status label
-$statusLabel = New-Object System.Windows.Forms.Label
-$statusLabel.Text = "Select a USB drive to create bootable PCHH recovery media"
-$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-$statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
-$statusLabel.Location = New-Object System.Drawing.Point(30, 110)
-$statusLabel.Size = New-Object System.Drawing.Size(540, 25)
-$form.Controls.Add($statusLabel)
+$targetPanel = New-Object System.Windows.Forms.Panel
+$targetPanel.Location = New-Object System.Drawing.Point(32, 202)
+$targetPanel.Size = New-Object System.Drawing.Size(656, 148)
+$targetPanel.BackColor = $colors.Surface
+$form.Controls.Add($targetPanel)
+$usbLabel = Add-Text $targetPanel "Target USB drive" 20 18 440 26 11 $colors.Text -Bold
+$driveHint = Add-Text $targetPanel "Connect a USB drive, then choose it below." 20 48 606 24 9 $colors.Muted
 
-# USB drive dropdown
-$usbLabel = New-Object System.Windows.Forms.Label
-$usbLabel.Text = "Target USB Drive:"
-$usbLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$usbLabel.ForeColor = [System.Drawing.Color]::FromArgb(248, 250, 252)
-$usbLabel.Location = New-Object System.Drawing.Point(30, 150)
-$usbLabel.Size = New-Object System.Drawing.Size(150, 25)
-$form.Controls.Add($usbLabel)
-
-# USB dropdown
 $usbCombo = New-Object System.Windows.Forms.ComboBox
-$usbCombo.Location = New-Object System.Drawing.Point(30, 180)
-$usbCombo.Size = New-Object System.Drawing.Size(540, 25)
+$usbCombo.Location = New-Object System.Drawing.Point(20, 88)
+$usbCombo.Size = New-Object System.Drawing.Size(486, 32)
+$usbCombo.Font = New-Object System.Drawing.Font("Segoe UI", 11)
 $usbCombo.DropDownStyle = "DropDownList"
-$usbCombo.BackColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
-$usbCombo.ForeColor = [System.Drawing.Color]::White
+$usbCombo.BackColor = $colors.Background
+$usbCombo.ForeColor = $colors.Text
 $usbCombo.FlatStyle = "Flat"
-$form.Controls.Add($usbCombo)
+$usbCombo.DropDownWidth = 610
+$usbCombo.AccessibleName = "Target USB drive"
+$usbCombo.TabIndex = 0
+$targetPanel.Controls.Add($usbCombo)
+$refreshButton = Add-Button $targetPanel "&Refresh" 518 82 118
+$refreshButton.TabIndex = 1
+$refreshButton.Add_Click({ Get-RemovableDisks })
 
-# Progress bar
+# Persistent progress card avoids the layout jumping between states.
+$progressPanel = New-Object System.Windows.Forms.Panel
+$progressPanel.Location = New-Object System.Drawing.Point(32, 366)
+$progressPanel.Size = New-Object System.Drawing.Size(656, 128)
+$progressPanel.BackColor = $colors.Surface
+$form.Controls.Add($progressPanel)
+$statusLabel = Add-Text $progressPanel "Ready to create" 20 18 616 28 12 $colors.Text -Bold
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(30, 230)
-$progressBar.Size = New-Object System.Drawing.Size(540, 30)
+$progressBar.Location = New-Object System.Drawing.Point(20, 58)
+$progressBar.Size = New-Object System.Drawing.Size(616, 8)
 $progressBar.Style = "Continuous"
-$progressBar.Visible = $false
-$form.Controls.Add($progressBar)
-
-# Progress label
-$progressLabel = New-Object System.Windows.Forms.Label
-$progressLabel.Text = ""
-$progressLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$progressLabel.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
-$progressLabel.Location = New-Object System.Drawing.Point(30, 265)
-$progressLabel.Size = New-Object System.Drawing.Size(540, 20)
-$progressLabel.Visible = $false
-$form.Controls.Add($progressLabel)
-
-# Success icon
-$successLabel = New-Object System.Windows.Forms.Label
-$successLabel.Text = "USB drive created successfully!"
-$successLabel.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
-$successLabel.ForeColor = [System.Drawing.Color]::FromArgb(34, 211, 238)
-$successLabel.Location = New-Object System.Drawing.Point(30, 230)
-$successLabel.Size = New-Object System.Drawing.Size(540, 40)
-$successLabel.TextAlign = "MiddleCenter"
+$progressPanel.Controls.Add($progressBar)
+$progressLabel = Add-Text $progressPanel "The recovery image will download automatically from GitHub." 20 82 616 28 9 $colors.Muted
+$successLabel = Add-Text $progressPanel "Your PCHH recovery USB is ready to use." 20 78 616 32 11 $colors.Success -Bold
 $successLabel.Visible = $false
-$form.Controls.Add($successLabel)
 
-# Flash button
-$flashButton = New-Object System.Windows.Forms.Button
-$flashButton.Text = "Create Bootable USB"
-$flashButton.Location = New-Object System.Drawing.Point(200, 320)
-$flashButton.Size = New-Object System.Drawing.Size(200, 45)
-$flashButton.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-$flashButton.BackColor = [System.Drawing.Color]::FromArgb(56, 189, 248)
-$flashButton.ForeColor = [System.Drawing.Color]::Black
-$flashButton.FlatStyle = "Flat"
-$flashButton.FlatAppearance.BorderSize = 0
-$flashButton.Cursor = "Hand"
-$form.Controls.Add($flashButton)
-
-# Close button
-$closeButton = New-Object System.Windows.Forms.Button
-$closeButton.Text = "Close"
-$closeButton.Location = New-Object System.Drawing.Point(410, 320)
-$closeButton.Size = New-Object System.Drawing.Size(160, 45)
-$closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 11)
-$closeButton.BackColor = [System.Drawing.Color]::FromArgb(51, 65, 85)
-$closeButton.ForeColor = [System.Drawing.Color]::White
-$closeButton.FlatStyle = "Flat"
-$closeButton.FlatAppearance.BorderSize = 0
-$closeButton.Cursor = "Hand"
+$warningLabel = Add-Text $form "All data on the selected USB drive will be erased. Back up your files first." 34 514 652 44 10 $colors.Warning
+$footerLabel = Add-Text $form "PCHH USB FLASHER" 34 622 300 22 8 $colors.Muted
+$closeButton = Add-Button $form "&Close" 336 600 112
+$closeButton.TabIndex = 3
 $closeButton.Add_Click({ $form.Close() })
-$form.Controls.Add($closeButton)
+$flashButton = Add-Button $form "&Create bootable USB" 460 600 228 -Primary
+$flashButton.TabIndex = 2
 
-# Warning label
-$warningLabel = New-Object System.Windows.Forms.Label
-$warningLabel.Text = "WARNING: All data on the selected USB drive will be erased"
-$warningLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$warningLabel.ForeColor = [System.Drawing.Color]::FromArgb(251, 146, 60)
-$warningLabel.Location = New-Object System.Drawing.Point(30, 380)
-$warningLabel.Size = New-Object System.Drawing.Size(540, 20)
-$warningLabel.TextAlign = "MiddleCenter"
-$form.Controls.Add($warningLabel)
+function Set-FlasherStage {
+    param([int]$Stage)
+    for ($i = 0; $i -lt $stepLabels.Count; $i++) {
+        $stepLabels[$i].ForeColor = $colors.Muted
+        if ($i -lt $Stage) { $stepLabels[$i].ForeColor = $colors.Success }
+        if ($i -eq $Stage) { $stepLabels[$i].ForeColor = $colors.Accent }
+    }
+}
+
+function Reset-FlasherPresentation {
+    $successLabel.Visible = $false
+    $progressLabel.Visible = $true
+    $warningLabel.Visible = $true
+    $statusLabel.ForeColor = $colors.Text
+    $progressBar.Value = 0
+    $closeButton.Text = "&Close"
+    $statusLabel.Text = "Ready to create"
+    $progressLabel.Text = "The recovery image will download automatically from GitHub."
+    Set-FlasherStage 0
+}
 
 # Function to get removable USB drives
 function Get-RemovableDisks {
+    Reset-FlasherPresentation
     try {
         $disks = Get-Disk | Where-Object { $_.BusType -eq 'USB' }
         $usbCombo.Items.Clear()
@@ -147,13 +178,21 @@ function Get-RemovableDisks {
         if ($usbCombo.Items.Count -eq 0) {
             $usbCombo.Items.Add("No USB drives detected") | Out-Null
             $flashButton.Enabled = $false
+            $usbCombo.SelectedIndex = 0
+            $statusLabel.Text = "Connect a USB drive"
+            $progressLabel.Text = "No USB drives found. Connect your drive and select Refresh."
         } else {
             $usbCombo.SelectedIndex = 0
             $flashButton.Enabled = $true
+            $statusLabel.Text = "Ready to create"
+            $progressLabel.Text = "The recovery image will download automatically from GitHub."
         }
     } catch {
         $usbCombo.Items.Clear()
-        $usbCombo.Items.Add("Error: " + $_.Exception.Message) | Out-Null
+        $usbCombo.Items.Add("Unable to scan USB drives") | Out-Null
+        $usbCombo.SelectedIndex = 0
+        $statusLabel.Text = "Drive scan failed"
+        $progressLabel.Text = "Run as Administrator, then select Refresh to try again."
         $flashButton.Enabled = $false
     }
 }
@@ -162,6 +201,8 @@ function Get-RemovableDisks {
 function Download-Image {
     param([string]$Url, [string]$Destination)
 
+    Set-FlasherStage 1
+    $flashButton.Text = "Downloading..."
     $progressBar.Visible = $true
     $progressBar.Style = "Continuous"
     $progressBar.Value = 0
@@ -233,6 +274,8 @@ function Download-Image {
 function Flash-USB {
     param([int]$DiskNumber, [string]$ImagePath)
 
+    Set-FlasherStage 2
+    $flashButton.Text = "Writing image..."
     $statusLabel.Text = "Writing image to USB drive..."
     $progressLabel.Text = "Preparing disk..."
     $progressBar.Style = "Marquee"
@@ -321,7 +364,7 @@ $flashButton.Add_Click({
     }
 
     $result = [System.Windows.Forms.MessageBox]::Show(
-        "This will ERASE all data on the selected USB drive. Continue?",
+        "This will ERASE all data on:`r`n`r`n$($usbCombo.SelectedItem)`r`n`r`nCreate a PCHH recovery USB on this drive?",
         "Confirm",
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
         [System.Windows.Forms.MessageBoxIcon]::Warning
@@ -331,6 +374,7 @@ $flashButton.Add_Click({
         return
     }
 
+    Reset-FlasherPresentation
     $flashButton.Enabled = $false
     $usbCombo.Enabled = $false
     $refreshButton.Enabled = $false
@@ -340,23 +384,34 @@ $flashButton.Add_Click({
     $selection = $usbCombo.SelectedItem.ToString()
     $diskNumber = [int]($selection -replace '^Disk (\d+):.*', '$1')
 
+    $flashed = $false
     $downloaded = Download-Image -Url $ImageUrl -Destination $TempPath
 
     if ($downloaded -eq $true) {
         $flashed = Flash-USB -DiskNumber $diskNumber -ImagePath $TempPath
 
         if ($flashed -eq $true) {
-            $progressBar.Visible = $false
+            Set-FlasherStage 3
+            $progressBar.Value = 100
             $progressLabel.Visible = $false
             $successLabel.Visible = $true
-            $statusLabel.Text = "USB drive is ready to use!"
+            $statusLabel.Text = "Recovery USB created"
+            $statusLabel.ForeColor = $colors.Success
             $warningLabel.Visible = $false
+            $closeButton.Text = "&Done"
             Remove-Item $TempPath -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 3
-            $form.Close()
+            $form.Refresh()
         }
     }
 
+    if (-not $flashed) {
+        $progressBar.Style = "Continuous"
+        $statusLabel.Text = "Creation did not complete"
+        $statusLabel.ForeColor = $colors.Warning
+        $progressLabel.Text = "Review the error and try again. A failed write may leave the USB unbootable."
+        Set-FlasherStage 0
+    }
+    $flashButton.Text = "&Create bootable USB"
     $flashButton.Enabled = $true
     $usbCombo.Enabled = $true
     $refreshButton.Enabled = $true
@@ -364,19 +419,9 @@ $flashButton.Add_Click({
     $form.ControlBox = $true
 })
 
-# Refresh button
-$refreshButton = New-Object System.Windows.Forms.Button
-$refreshButton.Text = "Refresh Drives"
-$refreshButton.Location = New-Object System.Drawing.Point(30, 320)
-$refreshButton.Size = New-Object System.Drawing.Size(160, 45)
-$refreshButton.Font = New-Object System.Drawing.Font("Segoe UI", 11)
-$refreshButton.BackColor = [System.Drawing.Color]::FromArgb(51, 65, 85)
-$refreshButton.ForeColor = [System.Drawing.Color]::White
-$refreshButton.FlatStyle = "Flat"
-$refreshButton.FlatAppearance.BorderSize = 0
-$refreshButton.Cursor = "Hand"
-$refreshButton.Add_Click({ Get-RemovableDisks })
-$form.Controls.Add($refreshButton)
+$usbCombo.Add_SelectedIndexChanged({
+    if ($usbCombo.Enabled -and $successLabel.Visible) { Reset-FlasherPresentation }
+})
 
 # Initial load
 Get-RemovableDisks
