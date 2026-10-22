@@ -1,0 +1,198 @@
+<!DOCTYPE html><html><head><title>PCHH Recovery</title><HTA:APPLICATION ID="PCHH" APPLICATIONNAME="PCHH Recovery" BORDER="none" CAPTION="no" SCROLL="no" SHOWINTASKBAR="yes" SINGLEINSTANCE="yes" WINDOWSTATE="maximize" /><meta http-equiv="X-UA-Compatible" content="IE=8" /><style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#101820;color:#edf3f6;font:15px 'Segoe UI',Tahoma,Arial,sans-serif}
+button,input,textarea{font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+button{cursor:pointer;border:1px solid #394854;background:#22313d;color:#edf3f6;padding:11px 16px;font-size:14px;border-radius:4px}
+button:hover{background:#2d4150;border-color:#69d9c2}button:focus,input:focus,textarea:focus{outline:2px solid #69d9c2;outline-offset:2px}
+button:disabled{color:#8b9ba8;border-color:#34414c;background:#1d2832;cursor:default}
+button.primary{background:#69d9c2;border-color:#69d9c2;color:#102720;font-weight:bold}
+#app{position:absolute;top:0;left:0;overflow:hidden;width:100%;height:100%}
+#sidebar{position:absolute;top:0;bottom:0;left:0;width:220px;background:#131f29;border-right:1px solid #2a3945;padding:26px 16px}
+#brand{padding:0 8px 24px;font-size:23px;font-weight:bold;letter-spacing:1px}#brand img{vertical-align:middle;margin-right:8px}
+.brand-sub{display:block;color:#95a9b8;font-size:11px;letter-spacing:2px;margin:8px 0 0 4px}
+.nav-label{font-size:10px;letter-spacing:2px;color:#8d9fab;margin:22px 12px 10px}
+.nav{display:block;width:100%;text-align:left;border-color:transparent;background:transparent;margin:4px 0;padding:12px}
+.nav.active{background:#203c3c;color:#88ead4;border-color:#345754}.nav-key{display:inline-block;width:25px;color:#69d9c2}
+#side-bottom{position:absolute;bottom:20px;left:16px;right:16px;border-top:1px solid #2a3945;padding-top:12px}#side-bottom button{width:48%;font-size:12px;padding:10px 4px}.side-note{color:#8d9fab;font-size:11px;padding:12px 4px 0}
+#header{position:absolute;top:0;left:220px;right:0;height:68px;border-bottom:1px solid #2a3945;padding:24px 32px;color:#9fb0bc;background:#101820;font-size:12px}
+#environment{display:none}.dot{display:inline-block;width:6px;height:6px;background:#69d9c2;margin:0 7px 2px 0}
+#viewport{position:absolute;top:68px;bottom:0;left:220px;right:0;overflow:hidden}
+#scroll-content{position:absolute;top:0;bottom:0;left:0;right:0;overflow:auto}
+#main{max-width:1440px;margin:0 auto;padding:30px 32px 42px}
+.eyebrow{color:#69d9c2;font-size:10px;letter-spacing:2px;margin-bottom:10px}h1{font-size:30px;font-weight:bold;letter-spacing:0;margin:0 0 10px}
+#description{color:#a5b6c3;line-height:1.6;margin-bottom:24px;max-width:720px}
+#overview{margin-bottom:28px}.welcome{border:1px solid #345652;border-left:3px solid #69d9c2;background:#162b2d;padding:20px 22px;overflow:hidden}.welcome h2{font-size:18px;font-weight:bold;margin-bottom:7px}.welcome p{color:#adc4c5;font-size:13px;line-height:1.6}.welcome button{margin:16px 8px 0 0}
+.section-title{font-size:11px;letter-spacing:1.5px;color:#a5b6c3;margin:26px 0 14px}.section-title span{color:#718794;letter-spacing:0;margin-left:8px}
+#search-wrap{margin-bottom:20px}#search{width:100%;background:#17232e;border:1px solid #394854;color:#edf3f6;font-size:14px;padding:13px 15px}#search-label{display:block;color:#a5b6c3;font-size:12px;margin-bottom:8px}
+.cards{overflow:hidden;margin:0 -6px}.card{float:left;width:33.333%;padding:0 6px 12px}.card-button{display:block;text-align:left;width:100%;height:auto;min-height:176px;background:#182630;border:1px solid #30424f;padding:18px;border-radius:5px}.card-button:hover{background:#20343e;border-color:#69d9c2}.card-top{display:block;margin-bottom:13px;color:#69d9c2;font-size:12px}.card-count{float:right;color:#91a6b4;font-size:11px}.card h3{font-size:15px;font-weight:bold;line-height:1.35;margin-bottom:8px}.card p{font-size:12px;line-height:1.6;color:#a5b6c3}.arrow{float:right;color:#69d9c2}
+.tool{display:block;width:100%;text-align:left;margin:0 0 9px;background:#182630;padding:16px 18px}.tool-number{display:inline-block;color:#69d9c2;width:30px;font-size:12px}.badge{float:right;color:#ebc791;background:#3b3226;padding:3px 7px;font-size:10px;margin-left:10px}.category-back{margin:0 0 20px}.result-group{font-size:12px;color:#93b8ba;margin:18px 0 10px}.empty{padding:30px 12px;color:#a5b6c3}
+#work,#editor,#prompt{display:none}#back{margin-bottom:16px}#status{padding:13px 16px;border-left:3px solid #69d9c2;background:#1a3034;color:#a6eddd;line-height:1.6;margin:10px 0 16px}
+.output-bar{overflow:hidden;color:#93a9b7;font-size:11px;letter-spacing:1px;margin:18px 0 8px}.follow-label{float:right;letter-spacing:0;font-size:12px}.follow-label input{vertical-align:middle;margin-right:5px}
+#log{height:260px;overflow:auto;background:#0b1219;border:1px solid #30424f;padding:16px;white-space:pre-wrap;word-wrap:break-word;font:14px Consolas,'Courier New',monospace;color:#d4e5ee;line-height:1.6}
+#prompt{padding:18px;background:#1c3339;border:1px solid #69d9c2;margin-top:16px}#promptText{display:block;white-space:pre-wrap;line-height:1.6}input,textarea{background:#0e1a24;color:#edf3f6;border:1px solid #506776;padding:11px;font-size:14px}#answer,#secret{width:58%;margin:14px 8px 0 0}#prompt button{margin:10px 5px 0 0}textarea{display:block;width:100%;height:130px;margin:12px 0;font:14px Consolas,monospace}
+.hint{color:#93a9b7;font-size:12px;line-height:1.7;margin:10px 0}.save-panel{padding:16px 0;margin-top:10px}#save-label{display:block;font-size:12px;color:#b4c5cf;margin-bottom:8px}#savePath{width:72%;margin-right:6px}.footer{clear:both;color:#7d95a3;font-size:11px;border-top:1px solid #2a3945;margin-top:20px;padding-top:16px;line-height:1.6}
+#splash{position:absolute;top:0;right:0;bottom:0;left:0;background:#101820;z-index:1000;text-align:center}#splash-brand{position:absolute;top:27%;left:0;right:0}#splash-subtitle{font-size:13px;letter-spacing:3px;color:#a5b6c3;margin-top:20px}#loading-track{width:180px;height:3px;margin:28px auto;background:#263b45;overflow:hidden}#loading-light{height:3px;width:60px;background:#69d9c2}
+/* Use classes: the WinPE IE8 document mode cannot rely on media queries. */
+.compact #sidebar{width:190px;padding:18px 12px}.compact #header,.compact #viewport{left:190px}.compact #main{padding:20px 24px}.compact .card{width:50%}.compact .card-button{min-height:160px;padding:14px}.compact #brand{padding-bottom:14px}.compact .nav-label{margin-top:14px}.compact .nav{padding:10px}.compact .welcome{padding:14px 18px}.compact #description{margin-bottom:16px}
+.narrow #sidebar{width:155px;padding:16px 10px}.narrow #header,.narrow #viewport{left:155px}.narrow #brand{font-size:19px}.narrow #brand img{width:28px;height:23px}.narrow .brand-sub{font-size:12px;letter-spacing:1px}.narrow #environment{display:none}.narrow #main{padding:16px}.narrow .card{width:100%}.narrow .card-button{height:auto;min-height:125px}.narrow h1{font-size:25px}.narrow #side-bottom{left:10px;right:10px}.narrow #answer,.narrow #secret,.narrow #savePath{width:100%;margin-bottom:10px}
+#scale-controls{float:right;margin:-10px 0 0 18px;white-space:nowrap}#scale-controls button{font-size:12px;padding:7px 10px}#scale-label{display:inline-block;width:44px;text-align:center;color:#b8cbd4}
+/* Small screens keep text at its actual size; navigation/content scroll separately. */
+#sidebar{overflow:auto}
+.compact #header{height:52px;padding:17px 20px}.compact #viewport{top:52px}
+.narrow #sidebar{width:140px;padding:14px 8px}.narrow #header,.narrow #viewport{left:140px}
+.narrow #brand{padding-left:0;padding-right:0;font-size:17px}
+.narrow #main{padding:16px 12px}
+.short #side-bottom{position:static;margin-top:18px;padding-bottom:12px}
+.short .nav-label{margin-top:12px}.short #brand{padding-bottom:10px}
+.short .nav{padding:9px 6px}.short .side-note{display:none}
+.narrow #header-title{display:none}
+</style><style id="text-sizing"></style><script language="JScript">
+var sh,fs,job=null,lastRequest='',timer,category=-1,editorKind='cmd',textSize=14;
+var catalog=[["Storage Setup", [["Rescan disks and detect Windows", "GUI_SCAN"], ["Bring a disk online", "STOR_ONLINE"], ["Assign a drive letter", "STOR_ASSIGN"], ["Load a storage driver", "STOR_DRIVER"], ["Disk and volume overview", "STOR_DETAIL"], ["BitLocker encryption and lock status", "STOR_BITLOCKER"]]], ["Disk and Partition Management", [["DiskPart script", "@diskpart"], ["List disks and volumes", "DISK_LIST"], ["Assign a drive letter", "DISK_ASSIGN"], ["Remove a drive letter", "DISK_REMOVE"], ["Format a volume", "DISK_FORMAT"], ["Clean and repartition a disk", "DISK_CLEAN"], ["Check a disk", "DISK_CHKDSK"], ["Volume information and dirty bit", "DISK_FSUTIL"], ["DiskRaid script", "@diskraid"]]], ["Boot Repair", [["Automatic boot repair", "BOOT_AUTO"], ["Rebuild UEFI boot files", "BOOT_UEFI"], ["Rebuild Legacy BIOS boot", "BOOT_BIOS"], ["Recreate EFI System Partition", "BOOT_ESP"], ["View and edit BCD", "@bcd"], ["Write Windows boot-sector code (NT60)", "BOOT_SECT"]]], ["System File and Image Repair", [["Offline System File Checker", "SFC_RUN"], ["Check image health", "DISM_CHECK"], ["Scan image health", "DISM_SCAN"], ["Restore image health", "DISM_RESTORE"], ["Restore from WIM or ESD", "DISM_SOURCE"], ["List installed packages", "DISM_PKGS"], ["Check Windows filesystem", "GUI_CHKDSK"]]], ["Registry and User Accounts", [["Load offline hive in Registry Editor", "REG_LOAD"], ["Open Registry Editor", "GUI_REGEDIT"], ["Unload an offline hive", "REG_UNLOAD"], ["Prepare local password recovery", "PASS_RESET"], ["Restore Ease of Access utility", "PASS_RESTORE"]]], ["Driver Management", [["Load driver into this environment", "STOR_DRIVER"], ["Inject drivers into Windows", "DRV_ADD"], ["Export Windows drivers", "DRV_EXPORT"], ["List Windows drivers", "GUI_DRIVERS"], ["List PE driver store", "GUI_PNPUTIL"]]], ["Data Recovery", [["Copy folders with RoboCopy", "DATA_ROBO"], ["Copy folders with XCopy", "DATA_XCOPY"], ["Mirror folders (deletes destination extras)", "DATA_MIRROR"], ["Rescue readable files", "DATA_RESCUE"], ["Take ownership and grant permissions", "DATA_OWN"], ["View or change file attributes", "DATA_ATTRIB"], ["Browse files with Notepad", "GUI_NOTEPAD"]]], ["Network Tools", [["Initialize networking", "GUI_NETWORK"], ["IP configuration", "GUI_IP"], ["Ping a host", "GUI_PING"], ["Trace a route", "GUI_TRACE"], ["Map a network share", "NET_MAP"], ["Set a static IP address", "NET_STATIC"], ["Restore DHCP", "NET_DHCP"]]], ["Diagnostics", [["System summary", "DIAG_SYS"], ["Disk overview", "DISK_LIST"], ["Network summary", "GUI_IP"], ["Offline Windows event errors", "DIAG_EVT"], ["Installed PE driver list", "GUI_DRIVERQUERY"], ["Open Task Manager", "GUI_TASKMGR"], ["Diagnose Windows recovery code (0x...)", "DIAG_RECOVERY"], ["Read Startup Repair log", "DIAG_SRT"]]], ["Startup Settings", [["Enable legacy F8 menu", "BM_F8"], ["Safe Mode", "BM_SAFE_MIN"], ["Safe Mode with Networking", "BM_SAFE_NET"], ["Safe Mode with Command Prompt", "BM_SAFE_CMD"], ["Enable boot logging", "BM_BOOTLOG"], ["Enable low resolution video", "BM_VGA"], ["Disable signature enforcement", "BM_NOSIG"], ["Disable early launch anti malware", "BM_NOELAM"], ["Disable automatic restart on failure", "BM_NORESTART"], ["Reset normal boot settings", "BM_RESET"], ["Boot installed WinRE next time", "BM_WINRE"], ["Show current boot settings", "BM_SHOW"], ["Locate WinRE images", "BM_FINDRE"]]], ["Utilities", [["Run commands", "@cmd"], ["Notepad", "GUI_NOTEPAD"], ["Task Manager", "GUI_TASKMGR"], ["Registry Editor", "GUI_REGEDIT"], ["Detect installed Windows", "GUI_DETECT"], ["Adjust output text size", "@size"]]]];
+function el(id){return document.getElementById(id);}
+function shell(){if(!sh)sh=new ActiveXObject('WScript.Shell');return sh;}
+function files(){if(!fs)fs=new ActiveXObject('Scripting.FileSystemObject');return fs;}
+function write(path,value){var f=files().CreateTextFile(path,true,false);f.Write(value);f.Close();}
+function read(path){var f=files().OpenTextFile(path,1,false);var s=f.AtEndOfStream?'':f.ReadAll();f.Close();return s;}
+function quote(s){return '"'+s+'"';}
+function html(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+function message(s){el('status').innerText=s;}
+var descriptions=[
+ 'Find Windows installations, unlock access and connect storage.',
+ 'Inspect disks, manage volumes and work with partitions.',
+ 'Restore boot files and repair Windows startup.',
+ 'Check Windows system files and service offline images.',
+ 'Work with offline registry hives and account recovery.',
+ 'Load, export and install storage or device drivers.',
+ 'Browse files and copy important data to another drive.',
+ 'Connect to a network, check connectivity and access shares.',
+ 'Inspect hardware, event errors and recovery logs.',
+ 'Configure Safe Mode, boot logging and recovery options.',
+ 'Open command tools and supporting Windows utilities.'
+];
+var symbols=['HD','DP','BT','SF','RG','DR','FL','NW','DX','ST','UT'];
+function intro(title,description){el('heading').innerText=title;el('description').innerText=description;}
+function navigation(active){var ids=['nav-home','nav-recovery','nav-diagnostics','nav-cmd'];for(var i=0;i<ids.length;i++)el(ids[i]).className='nav'+(ids[i]==active?' active':'');}
+function home(){if(job)return;category=-1;navigation('nav-home');el('work').style.display='none';el('menus').style.display='block';el('overview').style.display='block';el('search-wrap').style.display='block';el('search').value='';intro('Recovery Tools','A workspace to diagnose problems, protect your files and get Windows running again.');el('scroll-content').scrollTop=0;var h='';for(var i=0;i<catalog.length;i++)h+='<div class="card"><button class="card-button" onclick="submenu('+i+')"><span class="card-top"><span class="card-count">'+catalog[i][1].length+' tools</span>'+symbols[i]+'</span><h3>'+html(catalog[i][0])+'</h3><p>'+descriptions[i]+'</p></button></div>';el('menus').innerHTML=h;}
+function badge(action){return /^(DISK_FORMAT|DISK_CLEAN|DATA_MIRROR)$/.test(action)?'<span class="badge">ERASES DATA</span>':'';}
+function toolButton(i,n){var item=catalog[i][1][n];return '<button class="tool" onclick="openTool('+i+','+n+')">'+badge(item[1])+'<span class="tool-number">'+(n<9?'0':'')+(n+1)+'</span>'+html(item[0])+'</button>';}
+function openTool(i,n){if(job)return;category=i;choose(n);}
+function submenu(i){if(job)return;category=i;navigation(i==6?'nav-recovery':i==8?'nav-diagnostics':'nav-home');el('work').style.display='none';el('menus').style.display='block';el('overview').style.display='none';el('search-wrap').style.display='none';intro(catalog[i][0],descriptions[i]);var h='<button class="secondary category-back" onclick="home()">&larr; All categories</button>';for(var n=0;n<catalog[i][1].length;n++)h+=toolButton(i,n);el('menus').innerHTML=h;el('scroll-content').scrollTop=0;}
+function searchTools(){if(job)return;var q=el('search').value.toLowerCase().replace(/^\s+|\s+$/g,'');if(!q){home();el('search').focus();return;}el('overview').style.display='none';var h='',count=0;for(var i=0;i<catalog.length;i++){var group='';for(var n=0;n<catalog[i][1].length;n++){if((catalog[i][0]+' '+catalog[i][1][n][0]).toLowerCase().indexOf(q)>=0){group+=toolButton(i,n);count++;}}if(group)h+='<p class="result-group">'+html(catalog[i][0])+'</p>'+group;}el('menus').innerHTML=h||'<p class="empty">No matching tools. Try boot, disk, files or network.</p>';intro('Find a recovery tool',count+' matching tools');}
+function recoveryCode(){if(job)return;category=8;navigation('nav-diagnostics');startJob('DIAG_RECOVERY','Diagnose Windows recovery code (0x...)',null);}
+function choose(n){var item=catalog[category][1][n];if(item[1].charAt(0)=='@'){if(item[1]=='@size'){textSize=textSize==18?14:textSize+2;el('log').style.fontSize=textSize+'px';alert('Output text size: '+textSize+'px');return;}editor(item[1].substr(1),item[0]);}else startJob(item[1],item[0],null);}
+function work(title){el('overview').style.display='none';el('search-wrap').style.display='none';intro(title,'Follow the operation below. Any required choices will appear in this window.');el('menus').style.display='none';el('work').style.display='block';el('heading').innerText=title;el('editor').style.display='none';el('prompt').style.display='none';el('back').disabled=false;el('log').innerText='';message('');el('scroll-content').scrollTop=0;}
+function back(){if(job)return;if(category<0)home();else submenu(category);}
+function commandPrompt(){try{shell().Run(quote(shell().ExpandEnvironmentStrings('%SystemRoot%')+'\\System32\\cmd.exe')+' /d /k',1,false);}catch(e){alert('Unable to open Command Prompt: '+e.message);}}
+function editor(kind,title){if(kind=='cmd'){commandPrompt();return;}if(job)return;work(title);navigation('nav-cmd');editorKind=kind;el('editor').style.display='block';el('script').value=kind=='diskpart'?'list disk\r\nlist volume':kind=='bcd'?'bcdedit /enum all':'';el('editorHint').innerText=kind=='cmd'||kind=='bcd'?'Commands run hidden; output appears below. Each run starts a new command session. Use explicit noninteractive options for commands requiring input.':'Enter one command per line. The entire script runs when you select Run. Disk changes take effect immediately.';}
+function runScript(){if(job)return;var code=el('script').value;if(!code)return;startJob(null,el('heading').innerText,{kind:editorKind,code:code});}
+function startJob(action,title,script){
+ if(job)return;
+ try{
+  if(!script)work(title);
+  var dir=shell().ExpandEnvironmentStrings('%TEMP%')+'\\PCHH-'+new Date().getTime();files().CreateFolder(dir);
+  var root=shell().ExpandEnvironmentStrings('%SystemRoot%')+'\\System32';
+  var command;
+  if(script){
+   if(script.kind=='diskpart'||script.kind=='diskraid'){write(dir+'\\commands.txt',script.code+'\r\nexit\r\n');command=script.kind+' /s '+quote(dir+'\\commands.txt');}
+   else{write(dir+'\\commands.cmd','@echo off\r\n'+script.code+'\r\n');command='call '+quote(dir+'\\commands.cmd');}
+  }else command=quote(root+'\\cmd.exe')+' /d /c '+quote(quote(root+'\\startnet.cmd')+' /gui '+action+' '+quote(dir));
+  write(dir+'\\run.cmd','@echo off\r\n'+command+' <nul >'+quote(dir+'\\output.txt')+' 2>&1\r\n>'+quote(dir+'\\done.tmp')+' echo %errorlevel%\r\nmove /y '+quote(dir+'\\done.tmp')+' '+quote(dir+'\\done.txt')+' >nul\r\n');
+  job={dir:dir,script:!!script,request:'',initializing:action=='GUI_INIT'};lastRequest='';el('back').disabled=true;el('run').disabled=true;el('savePath').value=dir+'\\output.txt';message(job.initializing?'Getting your disks and network ready. Recovery Tools will open automatically.':'Running - output updates automatically');
+  shell().Run(quote(root+'\\cmd.exe')+' /d /c '+quote(quote(dir+'\\run.cmd')),0,false);
+  timer=window.setInterval(poll,250);
+ }catch(e){job=null;el('back').disabled=false;el('run').disabled=false;message('Unable to start: '+e.message);}
+}
+function poll(){
+ if(!job)return;
+ try{
+  var path=job.dir+'\\output.txt';if(files().FileExists(path)){var s=read(path);el('log').innerText=s.length>200000?'[Showing latest output; save the log for full output]\r\n'+s.substr(s.length-200000):s;if(el('follow').checked)el('log').scrollTop=10000000;}
+  path=job.dir+'\\request.txt';if(files().FileExists(path)){
+   var parts=read(path).replace(/\r/g,'').split('\n');
+   if(parts[0]&&parts[0]!=lastRequest){lastRequest=parts[0];job.request=parts[0];job.variable=parts[1];el('promptText').innerText=parts.slice(2).join('\n');el('answer').style.display=parts[1]=='password'?'none':'inline';el('secret').style.display=parts[1]=='password'?'inline':'none';el('answer').value='';el('secret').value='';el('prompt').style.display='block';message('Waiting for your input');el(parts[1]=='password'?'secret':'answer').focus();}
+  }
+  if(files().FileExists(job.dir+'\\done.txt')){var result=read(job.dir+'\\done.txt').replace(/\s/g,'');var initialized=job.initializing;window.clearInterval(timer);job=null;el('prompt').style.display='none';el('back').disabled=false;el('run').disabled=false;el('secret').value='';message(result=='1223'?'Cancelled': 'Finished (exit code '+result+') - review output above');if(initialized&&result=='0'){home();}else if(initialized){message('Setup could not finish. Review the details below, or select Back to tools to continue.');}}
+ }catch(e){message('Waiting for output: '+e.message);}
+}
+function submitAnswer(){
+ if(!job||!job.request)return;var value=el(job.variable=='password'?'secret':'answer').value;
+ // Batch helpers use CALL and diskpart pipelines. Reject syntax that could turn a value into a command.
+ if((job.variable=='password'?/["\r\n]/:/["%\^&|<>!\r\n]/).test(value)){alert('This field cannot contain quotes or command control characters. Use the command editor for advanced syntax.');return;}
+ if(/^(v|dk|ev)$/.test(job.variable)&&value&&!/^\d+$/.test(value)){alert('Enter a disk or volume number.');return;}
+ if(/^(l|ESP|res|dl)$/.test(job.variable)&&value&&!/^([a-z]:?|SYS|ALL)$/i.test(value)){alert('Enter a drive letter, with a colon only when requested.');return;}
+ if(/^(h|m|ly|ra)$/.test(job.variable)&&value&&!/^[1-5]$/.test(value)){alert('Enter one of the numbered choices shown above.');return;}
+ if(job.variable=='rcode'&&value&&!/^0x[0-9a-f]{8}$/i.test(value)){alert('Enter the full recovery code, for example 0xc0000225, or leave it blank.');return;}
+ if(/^(rdrive|rboot)$/.test(job.variable)&&value&&!/^[a-z]:?$/i.test(value)){alert('Enter one drive letter, such as D or D:.');return;}
+ if(job.variable=='rchoice'&&value&&!/^[0-4]$/.test(value)){alert('Select a proposed solution from 1 to 4, or 0 to finish.');return;}
+ if(job.variable=='rindex'&&value&&!/^[1-9][0-9]*$/.test(value)){alert('Enter a positive image index from the source image.');return;}
+ if(job.variable=='fs'&&value&&!/^(NTFS|FAT32|exFAT)$/i.test(value)){alert('Choose NTFS, FAT32 or exFAT.');return;}
+ var path=job.dir+'\\answer-'+job.request+'.txt';write(path+'.tmp',value+'\r\n');files().MoveFile(path+'.tmp',path);job.request='';el('answer').value='';el('secret').value='';el('prompt').style.display='none';message('Running - output updates automatically');
+}
+function cancelInput(){if(job&&job.request){write(job.dir+'\\cancel','cancel');el('prompt').style.display='none';message('Cancelling...');}}
+function saveLog(){try{var path=el('savePath').value;if(!path)return;var source=job?job.dir+'\\output.txt':null;if(!source)source=lastLog;if(source.toLowerCase()!=path.toLowerCase())files().CopyFile(source,path,true);message('Log saved to '+path);}catch(e){message('Unable to save log: '+e.message);}}
+var lastLog='';var originalPoll=poll;poll=function(){if(job)lastLog=job.dir+'\\output.txt';originalPoll();};
+function power(action){if(job)return;if(confirm(action=='reboot'?'Restart this computer?':'Shut down this computer?'))shell().Run('wpeutil.exe '+action,0,false);}
+var uiTextSize=15,layoutBusy=false;
+function applyTextSize(){
+ // Actual integer font sizes: no CSS zoom, transforms or resampled text.
+ var groups=[
+  ['html,body,button,input,textarea,#search',15],
+  ['h1',30],['#brand',23],['.welcome h2',18],['.card h3',16],
+  ['#description,.welcome p,.card p,.hint,#promptText',14],
+  ['.brand-sub,.nav-label,.eyebrow,.section-title,#search-label,.card-top,.card-count,.tool-number,.badge,.output-bar,.follow-label,#save-label,.footer,.side-note,#side-bottom button,#header,#scale-controls button',13],
+  ['#log,textarea',15]
+ ];
+ var css='';
+ for(var i=0;i<groups.length;i++){
+  var size=Math.max(12,Math.round(groups[i][1]*uiTextSize/15));
+  css+=groups[i][0]+'{font-size:'+size+'px;}';
+ }
+ el('text-sizing').styleSheet.cssText=css;
+ el('scale-label').innerText=uiTextSize+'px';
+}
+function layout(){
+ if(layoutBusy)return;layoutBusy=true;
+ try{
+  var root=document.documentElement,body=document.body;
+  var w=(root&&root.clientWidth)||(body&&body.clientWidth)||screen.width;
+  var h=(root&&root.clientHeight)||(body&&body.clientHeight)||screen.height;
+  var app=el('app');
+  app.style.width=Math.floor(w)+'px';app.style.height=Math.floor(h)+'px';
+  app.className=(w<1350||h<850?'compact':'')+(w<850?' narrow':'')+(h<650?' short':'');
+  el('log').style.height=Math.max(120,Math.min(360,h-400))+'px';
+  applyTextSize();
+ }finally{layoutBusy=false;}
+}
+function changeTextSize(delta){
+ uiTextSize=delta===0?15:Math.max(13,Math.min(22,uiTextSize+delta));
+ layout();
+}
+function finishStartup(){el('splash').style.display='none';}
+function startup(){window.setTimeout(finishStartup,2500);var began=new Date().getTime();var anim=window.setInterval(function(){var t=new Date().getTime()-began;el('loading-light').style.marginLeft=((t/8)%240-60)+'px';if(t>2100){window.clearInterval(anim);finishStartup();}},40);layout();home();if(shell().ExpandEnvironmentStrings('%PCHH_INITIALIZED%')!='1')startJob('GUI_INIT','Preparing recovery environment',null);}
+window.onresize=layout;window.onload=startup;window.onbeforeunload=function(){if(job)return 'A recovery operation is still running.';};
+</script></head><body><div id="app">
+<div id="splash"><div id="splash-brand"><img src="pchh-logo.png" width="240" height="198" alt="PC Help Hub" /><div id="splash-subtitle">Recovery Environment</div><div id="loading-track"><div id="loading-light"></div></div></div></div>
+<div id="sidebar">
+ <div id="brand"><img src="pchh-logo.png" width="44" height="36" alt="" />PCHH<span class="brand-sub">PC HELP HUB</span></div>
+ <p class="nav-label">WORKSPACE</p>
+ <button id="nav-home" class="nav active" onclick="home()"><span class="nav-key">&#9638;</span> All tools</button>
+ <button id="nav-recovery" class="nav" onclick="submenu(6)"><span class="nav-key">&#8599;</span> Recover files</button>
+ <button id="nav-diagnostics" class="nav" onclick="submenu(8)"><span class="nav-key">&#8981;</span> Diagnostics</button>
+ <p class="nav-label">ADVANCED</p>
+ <button id="nav-cmd" class="nav" onclick="editor('cmd','Run commands')"><span class="nav-key">&gt;_</span> Commands</button>
+ <div id="side-bottom"><button onclick="power('reboot')">Restart</button> <button onclick="power('shutdown')">Shut down</button><p class="side-note">PCHH Recovery / Windows PE</p></div>
+</div>
+<div id="header"><div id="scale-controls"><button onclick="changeTextSize(-1)" title="Smaller text">&#8722;</button><span id="scale-label">15px</span><button onclick="changeTextSize(1)" title="Larger text">+</button> <button onclick="changeTextSize(0)" title="Restore default text size">Reset</button></div><span id="environment"><span class="dot"></span>Windows PE environment</span><span id="header-title">PCHH &nbsp; / &nbsp; Windows Recovery</span></div>
+<div id="viewport"><div id="scroll-content"><div id="main">
+<p class="eyebrow">WINDOWS RECOVERY</p><h1 id="heading">Recovery Tools</h1><p id="description"></p>
+<div id="overview"><div class="welcome"><h2>Let's get your PC back on track.</h2><p>Start by checking the system, or copy your important files to another drive before making repairs.</p><button class="primary" onclick="recoveryCode()">Windows recovery code (0x...) &nbsp; &rarr;</button><button onclick="submenu(6)">Recover files</button></div><p class="section-title">TOOL LIBRARY <span>11 categories</span></p></div>
+<div id="search-wrap"><label id="search-label" for="search">Find a tool</label><input id="search" type="text" onkeyup="searchTools()" /></div>
+<div id="menus" class="cards"></div>
+<div id="work"><button id="back" class="secondary" onclick="back()">&larr; Back to tools</button>
+<div id="editor"><p class="hint" id="editorHint"></p><textarea id="script" spellcheck="false" aria-label="Commands to run"></textarea><button id="run" class="primary" onclick="runScript()">Run script</button></div>
+<div id="status" role="status" aria-live="polite"></div>
+<div class="output-bar"><label class="follow-label" for="follow"><input id="follow" type="checkbox" checked="checked" />Follow output</label>OPERATION OUTPUT</div><pre id="log" tabindex="0" aria-label="Operation output"></pre>
+<div id="prompt"><label id="promptText" for="answer"></label><input id="answer" onkeydown="if(event.keyCode==13)submitAnswer()" /><input id="secret" type="password" aria-label="Password" style="display:none" onkeydown="if(event.keyCode==13)submitAnswer()" /><button class="primary" onclick="submitAnswer()">Continue</button><button class="secondary" onclick="cancelInput()">Cancel operation</button></div>
+<div class="save-panel"><label id="save-label" for="savePath">Save operation log</label><input id="savePath" /><button class="secondary" onclick="saveLog()">Save log</button><p class="hint">Choose a path on your USB or another drive to keep the log after restarting.</p></div>
+</div><p class="footer">Drive letters in recovery may differ from Windows. Check the target drive before making changes.</p>
+</div></div></div></div></body></html>

@@ -100,8 +100,9 @@ PCHH/
     └── pchh-usb.img               # ISO + 512 MiB PCHH_DATA report partition
 ```
 
-The `dist/pchh-usb.img` image carries an extra MBR partition (`PCHH_DATA`,
-VFAT, 512 MiB) that the checks use to save reports and run USB write tests. The
+The `dist/pchh-usb.img` image carries an extra GPT Microsoft Basic Data partition (`PCHH_DATA`,
+FAT32, 512 MiB) that the checks use to save reports and run USB write tests. The
+USB image uses a standard protective MBR for Windows compatibility. The
 menu and "Diagnose all" detect this partition automatically when an ISO USB is
 flashed to a stick.
 
@@ -133,6 +134,75 @@ The tree must contain `EFI/Microsoft/Boot/bootmgfw.efi` and
 Windows-native tools such as `bcdboot`, `bcdedit`, DISM, SFC, and Startup
 Repair then run in their supported environment. The staged `winpe/` contents
 are local build input and are not committed to this repository.
+
+#### Windows-only GUI setup
+
+The PCHH recovery GUI requires both `WinPE-Scripting` (JScript and
+`WScript.Shell`) and `WinPE-HTA` (`mshta.exe`). HTA alone displays a frozen
+splash because none of the JavaScript, including tool buttons, can execute.
+Startup checks for scripting support and reports missing components before
+opening the GUI. macOS cannot service the WinPE image with the ADK. On a
+Windows computer with the matching Windows ADK and WinPE add-on installed:
+
+1. Run `prepare-winpe-gui.cmd` as administrator from the Deployment and
+   Imaging Tools Environment. It services `WinPE_amd64/media/sources/boot.wim`,
+   adding `WinPE-Scripting`, `WinPE-HTA`, and their matching language CABs
+   (currently `en-us`), then copies the recovery GUI and startup script.
+2. Copy the serviced `boot.wim` back into this repository's `winpe/sources/`.
+3. Rebuild with `make iso` and test the Windows PE boot entry.
+
+Use the WinPE optional components from the same ADK/WinPE release as the
+`boot.wim`; mixing versions can make the image fail to boot. The GUI source is
+`winpe/Windows/System32/pchh-gui.hta`.
+
+The GUI reflows to the actual window size without shrinking the rendered text.
+Use **−**, **+**, or **Reset** in the header to change actual font sizes.
+Navigation and content scroll separately on small displays.
+
+The default Windows PE boot entry requests a higher supported UEFI firmware
+display mode before handing off to Windows Basic Display. This is a best-effort
+handoff: Windows or firmware may select a different mode. Use **Windows PE
+(compatible display)** if the default entry has display problems. Some machines
+still require a compatible vendor graphics driver for native panel resolution;
+there is no additional universal accelerated graphics driver for WinPE.
+
+#### Diagnosing persistent Windows recovery errors
+
+This is separate from a BSOD. The target is the persistent Windows Boot
+Manager/WinRE screen such as **Your PC/Device needs to be repaired**, with
+codes including `0xc000000e`, `0xc0000225`, `0xc0000098`, and `0xc000000f`.
+
+Diagnostics menu **H → 7** now asks for the displayed code and named file,
+checks the detected Windows loader and Startup Repair log, locates and displays
+the BCD store, and saves a BCD backup before offering a UEFI `bcdboot` repair.
+That repair requires an EFI volume letter and the user to type `REPAIR`.
+Code guidance is advisory: confirm the volume layout and BCD findings before
+repairing, since the same code can have different causes.
+
+#### BitLocker detection
+
+Windows PE reports BitLocker encryption and lock status when scanning for
+Windows. You can also open **Storage Setup → BitLocker encryption and lock
+status**. Locked volumes cannot be identified as Windows installations until
+unlocked; the status report identifies encrypted volumes without assuming they
+contain Windows.
+
+To unlock a volume, open **Utilities → Run commands** and run the following
+with its actual recovery-environment drive letter and your 48-digit recovery key:
+
+```cmd
+manage-bde -unlock D: -RecoveryPassword YOUR-48-DIGIT-RECOVERY-KEY
+```
+
+Then select **Storage Setup → Rescan disks and detect Windows**. Unlocking
+does not turn off encryption. Volumes without a drive letter first need one
+assigned through Storage Setup. If BitLocker support is unavailable, the tool
+reports that limitation rather than treating the disk as unencrypted.
+
+`prepare-winpe-gui.cmd` adds the matching ADK's `WinPE-WMI` and
+`WinPE-SecureStartup` packages and their English language packages. Service
+`boot.wim` on Windows with this updated script, copy it into `winpe/sources/`,
+and rebuild the ISO/USB image to include BitLocker support.
 
 Or directly:
 
@@ -187,6 +257,23 @@ virtualization — the OS boots and the menu works, but for meaningful hardware
 results, test on real hardware.
 
 ## Flash to a USB stick
+
+### Windows USB writer
+
+The repository includes a Windows GUI writer at
+`tools/PchhUsbWriter/PchhUsbWriter.csproj`. On a Windows computer with the
+.NET 7 SDK, publish it as a single executable:
+
+```powershell
+dotnet publish tools\PchhUsbWriter\PchhUsbWriter.csproj -c Release -r win-x64 --self-contained true
+```
+
+Run `bin\Release\net7.0-windows\win-x64\publish\PCHH-USB-Writer.exe` as
+administrator. It lists USB disks while excluding the system and boot disks,
+requires two explicit confirmations before erasing, takes the target offline,
+writes the image with progress, flushes it, and verifies the written bytes with
+SHA-256 read-back. This is the Windows equivalent of a media creation tool;
+the executable must be built on Windows because WinForms targets Windows.
 
 Find your USB device (the drive to overwrite), then write the USB image
 (this **erases** the stick):
@@ -277,3 +364,30 @@ test does write to (and clean up on) the designated `PCHH_DATA` partition only.
   errors, and run automated color/shader renders — they do not yet provide a
   universal VRAM integrity test or proprietary NVIDIA stress driver.
 - Targets **x86_64** only.
+
+### Recovery GUI workflows
+
+Windows PE opens directly into the recovery GUI. All 11 categories have GUI
+submenus; repair commands run hidden and stream their combined output into the
+operation screen. Inputs, typed destructive confirmations, and network passwords
+are collected in the GUI. Cancel is available while an operation awaits input.
+
+Run commands opens a separate, visible Command Prompt with interactive input.
+DiskPart/DiskRaid and BCD retain their GUI script editors; those scripts run
+hidden and should use noninteractive options. Notepad, Registry Editor, and
+Task Manager retain their native GUI windows. Save logs to a
+persistent drive before restarting; the default temporary log is in the PE RAM
+disk. A finished operation means its commands returned; review their output for
+repair errors.
+
+Run `node tests/test-winpe-gui.js` to check catalog coverage and the GUI job
+protocol. Rebuild with `make iso`; flash `dist/pchh-usb.img` to update a USB.
+
+The build embeds the bundled `winpe/drivers/` files in the boot image at
+`X:\PCHH\Drivers`. Storage Setup loads these drivers from RAM, scans devices,
+rescans physical disks, and assigns letters to existing mountable volumes.
+Driver loading and DiskPart output remain visible in the operation log. Use
+**Storage Setup → Rescan disks and detect Windows** after connecting a drive.
+If a disk is still absent from `list disk`, check the reported controller/problem
+devices and load the matching vendor driver. BitLocker can prevent access to a
+Windows installation, but does not explain a physical disk missing from DiskPart.

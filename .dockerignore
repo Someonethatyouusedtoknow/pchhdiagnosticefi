@@ -5,3 +5,6 @@ dist
 *.md
 Makefile
 .DS_Store
+
+# Local recovery snapshots
+backups/

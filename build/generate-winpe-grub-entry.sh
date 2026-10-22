@@ -42,13 +42,22 @@ cp "$BCD"                  "$STAGING/bcd"
 cp "$SDI"                  "$STAGING/boot.sdi"
 cp winpe/sources/boot.wim  "$STAGING/boot.wim"
 
+# Keep driver files in RAM so loading storage drivers never depends on an
+# already-mounted USB/data partition. This updates a build copy, not the source WIM.
+if [ -d winpe/drivers ]; then
+    wimlib-imagex update "$STAGING/boot.wim" 1 --command 'add winpe/drivers /PCHH/Drivers'
+fi
+
 # wimboot injects any non-(.efi/.wim/.sdi/.ttf/bootmgr/BCD/boot.stl) file from
 # the partition root into \Windows\System32 of the live PE. Dropping our repair
 # menu here makes it load on every boot with no DISM/offline-servicing step.
 if [ -f winpe/Windows/System32/startnet.cmd ]; then
     cp winpe/Windows/System32/startnet.cmd "$STAGING/startnet.cmd"
-    # GUI launch is disabled until the required optional WinPE component is added.
-    # [ -f winpe/Windows/System32/pchh-gui.hta ] && cp winpe/Windows/System32/pchh-gui.hta "$STAGING/pchh-gui.hta"
+    if [ -f winpe/Windows/System32/pchh-gui.hta ]; then
+        cp winpe/Windows/System32/pchh-gui.hta "$STAGING/pchh-gui.hta"
+    fi
+    cp winpe/Windows/System32/pchh-logo.png "$STAGING/pchh-logo.png"
+    cp winpe/Windows/System32/winpeshl.ini "$STAGING/winpeshl.ini"
     echo "Repair menu (startnet.cmd) will be injected into System32 by wimboot"
 fi
 
@@ -63,6 +72,23 @@ menuentry "PCHH - Windows PE Advanced Repair" {
     insmod part_msdos
     insmod fat
     insmod chain
+    search --no-floppy --file --set=root /wimboot.efi
+    # Ask firmware for a supported higher-resolution GOP mode before handing
+    # off to WinPE Basic Display. The list falls back on smaller/older displays.
+    # WinPE/firmware may still replace this mode during boot.
+    insmod all_video
+    insmod gfxterm
+    set gfxmode=1920x1080,1920x1200,1600x900,1440x900,1366x768,1280x1024,1280x800,1024x768,auto
+    set gfxpayload=keep
+    terminal_output gfxterm
+    chainloader /wimboot.efi
+}
+menuentry "PCHH - Windows PE (compatible display)" {
+    insmod part_gpt
+    insmod part_msdos
+    insmod fat
+    insmod chain
+    terminal_output console
     search --no-floppy --file --set=root /wimboot.efi
     chainloader /wimboot.efi
 }

@@ -11,8 +11,12 @@ dist/
 
 # Local Microsoft ADK/WinPE build inputs (licensed binaries, not committed)
 WinPE_amd64/
+PCHH_pregui/
 winpe/*
 !winpe/.gitkeep
 # ...but DO track our own repair menu and the bundled open storage drivers
 !winpe/Windows/
 !winpe/drivers/
+
+# Local recovery snapshots
+backups/

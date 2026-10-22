@@ -109,6 +109,7 @@ RUN --mount=type=secret,id=pchh-key,required=false \
         ca-certificates \
         curl \
         cabextract \
+        wimtools \
         cpio; \
     apt-get install -y --no-install-recommends memtest86+ \
         || echo "WARN: memtest86+ unavailable, RAM test entry will be omitted"; \
@@ -171,7 +172,7 @@ RUN set -eux; \
     mmd -i /tmp/pchh-data.img ::/drivers >/dev/null 2>&1 || true; \
     mcopy -i /tmp/pchh-data.img /tmp/pchh-drivers-README.txt ::/drivers/README.txt; \
     if [ -d winpe/drivers ]; then \
-        mcopy -s -i /tmp/pchh-data.img winpe/drivers/* ::/drivers/ >/dev/null 2>&1 || true; \
+        mcopy -s -i /tmp/pchh-data.img winpe/drivers/* ::/drivers/; \
         echo "Bundled storage drivers copied into PCHH_DATA:/drivers/"; \
     fi; \
     # wimboot (UEFI) reads its files from the root of the partition it was \
@@ -186,14 +187,16 @@ RUN set -eux; \
     xorriso -indev /out/pchh.iso \
         -outdev /out/pchh-usb.img \
         -boot_image any replay \
-        -boot_image any appended_part_as=mbr \
+        -boot_image any appended_part_as=gpt \
         -append_partition 2 0x0c /tmp/pchh-data.img \
         $(if [ -f /tmp/winpe-fat.img ]; then printf '%s' '-append_partition 3 0x0c /tmp/winpe-fat.img'; fi); \
     dd if=/out/pchh-usb.img of=/tmp/pchh-mbr.bin bs=512 count=1 status=none; \
     dd if=/dev/zero of=/out/pchh-usb.img bs=512 count=1 conv=notrunc status=none; \
     sgdisk -e /out/pchh-usb.img; \
-    sgdisk -t 5:ebd0a0a2-b9e5-4433-87c0-68b6b72699c7 /out/pchh-usb.img; \
-    dd if=/tmp/pchh-mbr.bin of=/out/pchh-usb.img bs=512 count=1 conv=notrunc status=none; \
+    sgdisk -t 4:0700 -c 4:PCHH_DATA -t 5:0700 -c 5:PCHH_WINPE /out/pchh-usb.img; \
+    # Preserve GRUB BIOS code, but keep the standard protective MBR made by sgdisk. \
+    # Restoring all 512 bytes would reinstate the conflicting hybrid table. \
+    dd if=/tmp/pchh-mbr.bin of=/out/pchh-usb.img bs=440 count=1 conv=notrunc status=none; \
     xorriso -indev /out/pchh-usb.img -report_system_area plain; \
     ls -lh /out/pchh.iso /out/pchh-usb.img
 
